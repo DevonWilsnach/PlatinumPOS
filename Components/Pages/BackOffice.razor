@@ -1,0 +1,1182 @@
+@page "/back-office"
+@inject IDbContextFactory<PosDbContext> DbFactory
+@inject CashierSession CashierSession
+@inject LicenceClientService LicenceService
+@inject PosSettingsService Settings
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Back Office — PlatinumPOS</PageTitle>
+
+<div class="pa-6">
+    <div class="rw-brand-header mb-6">
+        <div class="rw-brand-text">
+            <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight: 700; font-family: 'Outfit', sans-serif;">Back Office Management</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">Administer products, review sales history, print shift Z-reports, and manage cashier terminal locks.</MudText>
+        </div>
+    </div>
+
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" Color="Color.Primary" Class="rw-activity-card">
+        
+        <!-- Tab 1: Sales Dashboard & History -->
+        <MudTabPanel Text="Sales Dashboard" Icon="@Icons.Material.Filled.Analytics">
+            <div class="pa-4">
+                <MudGrid Spacing="3" Class="mb-6">
+                    <!-- Revenue Tile -->
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Success" Size="Size.Small" />
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Total Revenue</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.h4" Style="font-weight: 700;">@_currencySymbol@_totalRevenue.ToString("N2")</MudText>
+                        </MudPaper>
+                    </MudItem>
+                    
+                    <!-- Sales Count Tile -->
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                <MudIcon Icon="@Icons.Material.Filled.Receipt" Color="Color.Primary" Size="Size.Small" />
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Total Transactions</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.h4" Style="font-weight: 700;">@_transactions.Count</MudText>
+                        </MudPaper>
+                    </MudItem>
+
+                    <!-- Avg Sale Tile -->
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                <MudIcon Icon="@Icons.Material.Filled.ShoppingBag" Color="Color.Tertiary" Size="Size.Small" />
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Average Basket Size</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.h4" Style="font-weight: 700;">@_currencySymbol@_avgSale.ToString("N2")</MudText>
+                        </MudPaper>
+                    </MudItem>
+
+                    <!-- Payment Tally Tile -->
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                <MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Warning" Size="Size.Small" />
+                                <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Cash vs Card Sales</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                                Cash: @_currencySymbol@_cashTotal.ToString("N2")<br />
+                                Card: @_currencySymbol@_cardTotal.ToString("N2")
+                            </MudText>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+
+                <!-- Date Range Filter -->
+                <MudPaper Class="pa-4 mb-6 w8-tile" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                    <MudGrid Spacing="3" AlignItems="AlignItems.Center">
+                        <MudItem xs="12" sm="4">
+                            <MudDatePicker @bind-Date="_startDate" Label="Start Date" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudDatePicker @bind-Date="_endDate" Label="End Date" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudItem>
+                        <MudItem xs="12" sm="4">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadDataAsync" FullWidth="true" Style="border-radius:100px; font-weight:600;">
+                                Apply Filter
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+
+                <!-- Daily Z-Report actions -->
+                <div class="d-flex justify-between align-center mb-6 pa-4 w8-tile" style="background-color: var(--mud-palette-primary-lighten); border-color: transparent !important;">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight:700;">Active Daily Shift Summary</MudText>
+                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-primary-darken)">Generate a POS Z-Report to print and clear current session logs.</MudText>
+                    </MudStack>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" Style="border-radius:100px; font-weight:600;" 
+                               OnClick="PrintZReport" StartIcon="@Icons.Material.Filled.Print">
+                        Print Z-Report
+                    </MudButton>
+                </div>
+
+                <!-- Past transactions table -->
+                <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">Recent Transaction History</MudText>
+                <MudTable Items="@_transactions" Hover="true" Breakpoint="Breakpoint.Md" Elevation="0" Dense="true">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Date/Time</MudTh>
+                        <MudTh>Cashier</MudTh>
+                        <MudTh>Subtotal</MudTh>
+                        <MudTh>Discount</MudTh>
+                        <MudTh>Total</MudTh>
+                        <MudTh>Method</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh Style="text-align:right">Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="ID">#@context.Id</MudTd>
+                        <MudTd DataLabel="Date/Time">@context.Timestamp.ToLocalTime().ToString("g")</MudTd>
+                        <MudTd DataLabel="Cashier">@context.Cashier?.Name</MudTd>
+                        <MudTd DataLabel="Subtotal">@_currencySymbol@context.Subtotal.ToString("N2")</MudTd>
+                        <MudTd DataLabel="Discount">@_currencySymbol@context.DiscountAmount.ToString("N2")</MudTd>
+                        <MudTd DataLabel="Total" Style="font-weight:700;">@_currencySymbol@context.TotalAmount.ToString("N2")</MudTd>
+                        <MudTd DataLabel="Method">@context.PaymentMethod</MudTd>
+                        <MudTd DataLabel="Status">
+                            @if (context.OrderStatus == "Completed")
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text">Completed</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text">Voided</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Actions" Style="text-align:right">
+                            <MudStack Row="true" Spacing="1" Justify="Justify.FlexEnd">
+                                <MudIconButton Icon="@Icons.Material.Filled.Receipt" Color="Color.Primary" Size="Size.Small" 
+                                               OnClick="() => OpenReceiptPreview(context)" title="View Receipt" />
+                                @if (context.OrderStatus == "Completed")
+                                {
+                                    <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" Style="border-radius:100px;"
+                                               OnClick="() => VoidTransactionAsync(context)">
+                                        Void
+                                    </MudButton>
+                                }
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager />
+                    </PagerContent>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+
+        <!-- Tab 2: Products Management -->
+        <MudTabPanel Text="Products & Catalog" Icon="@Icons.Material.Filled.RestaurantMenu">
+            <div class="pa-4">
+                <div class="d-flex justify-between align-center mb-4">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600;">Manage Products</MudText>
+                    <MudStack Row="true" Spacing="2">
+                        <MudFileUpload T="IBrowserFile" FilesChanged="UploadProductsCsvAsync" Accept=".csv">
+                            <ButtonTemplate>
+                                <MudButton HtmlTag="label" for="@context" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FileUpload" Style="border-radius:100px; font-weight:600;">
+                                    Import CSV
+                                </MudButton>
+                            </ButtonTemplate>
+                        </MudFileUpload>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" Style="border-radius:100px; font-weight:600;"
+                                   OnClick="OpenCreateProductDialog" StartIcon="@Icons.Material.Filled.Add">
+                            Add New Product
+                        </MudButton>
+                    </MudStack>
+                </div>
+
+                <MudTable Items="@_products" Hover="true" Breakpoint="Breakpoint.Md" Elevation="0" Dense="true" Filter="FilterProductSearch">
+                    <ToolBarContent>
+                        <MudTextField @bind-Value="_prodSearch" Placeholder="Search products name or barcode..." Adornment="Adornment.Start" 
+                                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Margin="Margin.Dense" 
+                                      Variant="Variant.Outlined" Style="max-width:320px;" Immediate="true" />
+                    </ToolBarContent>
+                    <HeaderContent>
+                        <MudTh>Barcode</MudTh>
+                        <MudTh>Product Name</MudTh>
+                        <MudTh>Category</MudTh>
+                        <MudTh>Selling Price</MudTh>
+                        <MudTh>Unit Cost</MudTh>
+                        <MudTh>Stock Count</MudTh>
+                        <MudTh>Color Theme</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh Style="text-align:right">Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Barcode" Style="font-family: monospace;">@context.Barcode</MudTd>
+                        <MudTd DataLabel="Product Name" Style="font-weight:600">@context.Name</MudTd>
+                        <MudTd DataLabel="Category">@context.Category?.Name</MudTd>
+                        <MudTd DataLabel="Selling Price">@_currencySymbol@context.Price.ToString("N2")</MudTd>
+                        <MudTd DataLabel="Unit Cost">@_currencySymbol@context.Cost.ToString("N2")</MudTd>
+                        <MudTd DataLabel="Stock Count">
+                            <span class="@(context.StockQuantity <= 5 ? "mud-text-warning font-weight-bold" : "")">
+                                @context.StockQuantity
+                            </span>
+                        </MudTd>
+                        <MudTd DataLabel="Color Theme">
+                            <span style="@($"display:inline-block; width:12px; height:12px; border-radius:50%; background-color:{context.Color}; margin-right:6px;")"></span>
+                            @context.Color
+                        </MudTd>
+                        <MudTd DataLabel="Status">
+                            @if (context.IsActive)
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text">Active</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Text">Inactive</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Actions" Style="text-align:right">
+                            <MudStack Row="true" Spacing="1" Justify="Justify.FlexEnd">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Size="Size.Small" 
+                                               OnClick="() => OpenEditProductDialog(context)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" 
+                                               OnClick="() => DeleteProductAsync(context)" />
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager />
+                    </PagerContent>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+
+        <!-- Tab: Categories -->
+        <MudTabPanel Text="Categories" Icon="@Icons.Material.Filled.Category">
+            <div class="pa-4">
+                <div class="d-flex justify-between align-center mb-4">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600;">Product Categories</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" Style="border-radius:100px; font-weight:600;"
+                               OnClick="OpenCreateCategoryDialog" StartIcon="@Icons.Material.Filled.Add">
+                        Add New Category
+                    </MudButton>
+                </div>
+
+                @if (!_categories.Any())
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3" Style="border-radius:12px">
+                        No categories yet. Add at least one category here before creating products.
+                    </MudAlert>
+                }
+
+                <MudTable Items="@_categories" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0" Dense="true">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Name</MudTh>
+                        <MudTh>Color Theme</MudTh>
+                        <MudTh>Products</MudTh>
+                        <MudTh Style="text-align:right">Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>#@context.Id</MudTd>
+                        <MudTd Style="font-weight:600">@context.Name</MudTd>
+                        <MudTd>
+                            <span style="@($"display:inline-block; width:12px; height:12px; border-radius:50%; background-color:{context.Color}; margin-right:6px;")"></span>
+                            @context.Color
+                        </MudTd>
+                        <MudTd>@(_products.Count(p => p.CategoryId == context.Id))</MudTd>
+                        <MudTd Style="text-align:right">
+                            <MudStack Row="true" Spacing="1" Justify="Justify.FlexEnd">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Size="Size.Small"
+                                               OnClick="() => OpenEditCategoryDialog(context)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                               OnClick="() => DeleteCategoryAsync(context)" />
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+
+        <!-- Tab 3: Cashier Operators -->
+        <MudTabPanel Text="Cashier Profiles" Icon="@Icons.Material.Filled.People">
+            <div class="pa-4">
+                <div class="d-flex justify-between align-center mb-4">
+                    <MudText Typo="Typo.h6" Style="font-weight: 600;">Terminal Cashiers</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" Style="border-radius:100px; font-weight:600;"
+                               OnClick="OpenCreateCashierDialog" StartIcon="@Icons.Material.Filled.PersonAdd">
+                        Add New Cashier
+                    </MudButton>
+                </div>
+
+                <MudTable Items="@_cashiers" Hover="true" Breakpoint="Breakpoint.Sm" Elevation="0" Dense="true">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Name</MudTh>
+                        <MudTh>System Role</MudTh>
+                        <MudTh>Active Status</MudTh>
+                        <MudTh Style="text-align:right">Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>#@context.Id</MudTd>
+                        <MudTd Style="font-weight:600">@context.Name</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Color="@(context.Role == "Manager" ? Color.Primary : Color.Default)" Size="Size.Small" Variant="Variant.Filled">
+                                @context.Role
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            @if (context.IsActive)
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text">Active</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text">Disabled</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd Style="text-align:right">
+                            <MudStack Row="true" Spacing="1" Justify="Justify.FlexEnd">
+                                <MudButton Variant="Variant.Text" Color="Color.Warning" Size="Size.Small" Style="border-radius:100px;"
+                                           OnClick="() => OpenResetPinDialog(context)">
+                                    Reset PIN
+                                </MudButton>
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Default" Size="Size.Small" 
+                                               OnClick="() => OpenEditCashierDialog(context)" />
+                                @if (context.Id != CashierSession.CurrentCashier?.Id)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" 
+                                                   OnClick="() => DeleteCashierAsync(context)" />
+                                }
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+
+        <!-- Tab 4: System Configurations & Licensing -->
+        <MudTabPanel Text="Settings & Licensing" Icon="@Icons.Material.Filled.Settings">
+            <div class="pa-4">
+                <MudGrid Spacing="4">
+                    <!-- Store config section -->
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight: 700;">Store Configurations</MudText>
+                        <MudPaper Class="pa-5 w8-tile d-flex flex-column gap-4" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <MudTextField @bind-Value="_storeName" Label="Store Display Name" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudTextField @bind-Value="_currencySymbol" Label="Currency Symbol" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            <MudNumericField @bind-Value="_taxRate" Label="Standard VAT Rate (%)" Variant="Variant.Outlined" Margin="Margin.Dense" Format="F2" />
+                            
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" Style="border-radius:100px; font-weight:600; mt-2"
+                                       OnClick="SaveStoreSettingsAsync">
+                                Save Configurations
+                            </MudButton>
+                        </MudPaper>
+                    </MudItem>
+
+                    <!-- License status & sync -->
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.subtitle1" Class="mb-3" Style="font-weight: 700;">Licensing Status</MudText>
+                        <MudPaper Class="pa-5 w8-tile d-flex flex-column gap-3" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <div class="d-flex justify-between">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Footprint</MudText>
+                                <MudText Typo="Typo.body2" Style="font-family: monospace; font-weight:600;">@_footprint</MudText>
+                            </div>
+                            <div class="d-flex justify-between">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Auth Server</MudText>
+                                <MudText Typo="Typo.body2">@_authBaseUrl</MudText>
+                            </div>
+                            <div class="d-flex justify-between align-center">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Current Status</MudText>
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.CheckCircle">
+                                    Licensed
+                                </MudChip>
+                            </div>
+
+                            <MudDivider Class="my-2" Style="border-color: var(--mud-palette-divider)" />
+
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Style="border-radius:100px; font-weight:600;"
+                                       OnClick="CheckLicenseStatusAsync" Disabled="_isCheckingLicense">
+                                @if (_isCheckingLicense)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>Syncing...</span>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Small" Class="mr-2" />
+                                    <span>Sync with PlatinumAuth</span>
+                                }
+                            </MudButton>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+            </div>
+        </MudTabPanel>
+
+        <!-- Tab 5: Audit Logs -->
+        <MudTabPanel Text="Audit Logs" Icon="@Icons.Material.Filled.History">
+            <div class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">System Activity Logs</MudText>
+                <MudTable Items="@_auditLogs" Hover="true" Breakpoint="Breakpoint.Md" Elevation="0" Dense="true" RowsPerPage="20">
+                    <HeaderContent>
+                        <MudTh>ID</MudTh>
+                        <MudTh>Date/Time</MudTh>
+                        <MudTh>Cashier/User</MudTh>
+                        <MudTh>Action</MudTh>
+                        <MudTh>Details</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="ID">#@context.Id</MudTd>
+                        <MudTd DataLabel="Date/Time">@context.Timestamp.ToLocalTime().ToString("g")</MudTd>
+                        <MudTd DataLabel="User">@context.CashierName</MudTd>
+                        <MudTd DataLabel="Action">
+                            <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Text">@context.Action</MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Details">@context.Details</MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager />
+                    </PagerContent>
+                </MudTable>
+            </div>
+        </MudTabPanel>
+
+    </MudTabs>
+</div>
+
+<!-- Receipt Dialog Preview -->
+<MudDialog @bind-Visible="_receiptPreviewVisible" Options="_receiptPreviewOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700; font-family:'Outfit',sans-serif;">Transaction Details</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_viewingTransaction != null)
+        {
+            <div style="background-color: #FFFFFF; color: #1F1F1F; font-family: 'JetBrains Mono', monospace; border: 1px dashed #747775; padding: 16px; border-radius: 8px; width: 100%; max-width: 320px; font-size: 0.8125rem; margin: 0 auto;">
+                <div style="text-align: center; font-weight: bold; font-size: 0.9375rem; margin-bottom: 4px;">
+                    @_storeName
+                </div>
+                <div style="text-align: center; color:#444746; font-size:0.6875rem; margin-bottom: 8px;">
+                    Powered by Platinum Brink Technologies
+                </div>
+                <div style="border-bottom: 1px dashed #E3E3E3; padding-bottom: 4px; margin-bottom: 8px; font-size: 0.6875rem; color:#444746;">
+                    Date: @_viewingTransaction.Timestamp.ToLocalTime().ToString("g")<br />
+                    Cashier: @_viewingTransaction.Cashier?.Name<br />
+                    Sale ID: #@_viewingTransaction.Id<br />
+                    Status: @(_viewingTransaction.OrderStatus == "Completed" ? "PAID" : "VOIDED / REFUNDED")
+                </div>
+                
+                @foreach (var item in _viewingItems)
+                {
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span>@item.ProductName x @item.Quantity</span>
+                        <span>@_currencySymbol@((item.UnitPrice * item.Quantity - item.DiscountAmount).ToString("N2"))</span>
+                    </div>
+                }
+                
+                <div style="border-top: 1px dashed #E3E3E3; margin-top:8px; padding-top:8px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                        <span>TOTAL</span>
+                        <span>@_currencySymbol@_viewingTransaction.TotalAmount.ToString("N2")</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top:4px; color:#444746;">
+                        <span>Method</span>
+                        <span>@_viewingTransaction.PaymentMethod</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color:#444746;">
+                        <span>Cash Tendered</span>
+                        <span>@_currencySymbol@_viewingTransaction.CashReceived.ToString("N2")</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color:#444746;">
+                        <span>Change Given</span>
+                        <span>@_currencySymbol@_viewingTransaction.ChangeGiven.ToString("N2")</span>
+                    </div>
+                </div>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Style="border-radius:100px;" OnClick="() => _receiptPreviewVisible = false">Close</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Product Edit/Create Dialog -->
+<MudDialog @bind-Visible="_productDialogVisible" Options="_editDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700;">@_productDialogTitle</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_editingProduct.Name" Label="Product Name" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_editingProduct.Barcode" Label="Barcode / Code" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect @bind-Value="_editingProduct.CategoryId" Label="Category" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true">
+                    @foreach (var cat in _categories)
+                    {
+                        <MudSelectItem Value="cat.Id">@cat.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudColorPicker @bind-Text="_editingProduct.Color" Label="Tile Color" Style="@($"color: {_editingProduct.Color};")" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudNumericField @bind-Value="_editingProduct.Price" Label="Selling Price" Variant="Variant.Outlined" Margin="Margin.Dense" Format="F2" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudNumericField @bind-Value="_editingProduct.Cost" Label="Unit Cost" Variant="Variant.Outlined" Margin="Margin.Dense" Format="F2" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudNumericField @bind-Value="_editingProduct.StockQuantity" Label="Stock Level" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudSwitch @bind-Value="_editingProduct.IsActive" Label="Available / Active" Color="Color.Primary" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _productDialogVisible = false" Variant="Variant.Text" Style="border-radius:100px;">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" DropShadow="false" Style="border-radius:100px;" OnClick="SaveProductAsync">Save Product</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Category Edit/Create Dialog -->
+<MudDialog @bind-Visible="_categoryDialogVisible" Options="_smallDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700;">@_categoryDialogTitle</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_editingCategory.Name" Label="Category Name" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudColorPicker @bind-Text="_editingCategory.Color" Label="Tile Color" Style="@($"color: {_editingCategory.Color};")" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _categoryDialogVisible = false" Variant="Variant.Text" Style="border-radius:100px;">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" DropShadow="false" Style="border-radius:100px;" OnClick="SaveCategoryAsync">Save Category</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Cashier Edit/Create Dialog -->
+<MudDialog @bind-Visible="_cashierDialogVisible" Options="_editDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700;">@_cashierDialogTitle</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_editingCashier.Name" Label="Full Name" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect @bind-Value="_editingCashier.Role" Label="Role" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true">
+                    <MudSelectItem Value="@("Cashier")">Cashier (Sales Register Only)</MudSelectItem>
+                    <MudSelectItem Value="@("Manager")">Manager (Full Back Office access)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" Class="d-flex align-center">
+                <MudSwitch @bind-Value="_editingCashier.IsActive" Label="Enabled status" Color="Color.Primary" />
+            </MudItem>
+            @if (_isCreatingCashier)
+            {
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_newCashierPin" Label="Initial 4-Digit PIN" Variant="Variant.Outlined" Margin="Margin.Dense" 
+                                  MaxLength="4" HelperText="Numerical digits only" Required="true" />
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _cashierDialogVisible = false" Variant="Variant.Text" Style="border-radius:100px;">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" DropShadow="false" Style="border-radius:100px;" OnClick="SaveCashierAsync">Save Cashier</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Reset Pin Dialog -->
+<MudDialog @bind-Visible="_resetPinDialogVisible" Options="_smallDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700;">Reset Cashier PIN</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_editingCashier != null)
+        {
+            <MudText Typo="Typo.body2" Class="mb-3">Change security PIN code for <strong>@_editingCashier.Name</strong>.</MudText>
+            <MudTextField @bind-Value="_newCashierPin" Label="New 4-Digit PIN" Variant="Variant.Outlined" Margin="Margin.Dense" 
+                          MaxLength="4" HelperText="Exactly 4 numeric digits" Required="true" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _resetPinDialogVisible = false" Variant="Variant.Text" Style="border-radius:100px;">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" DropShadow="false" Style="border-radius:100px;" OnClick="SaveResetPinAsync">Update PIN</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    // Analytics
+    private decimal _totalRevenue;
+    private decimal _avgSale;
+    private decimal _cashTotal;
+    private decimal _cardTotal;
+
+    // Database contents
+    private List<Transaction> _transactions = new();
+    private List<Product> _products = new();
+    private List<Category> _categories = new();
+    private List<Cashier> _cashiers = new();
+    private List<AuditLog> _auditLogs = new();
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+
+    // Store settings
+    private string _storeName = "Platinum Brink Cafe & Deli";
+    private string _currencySymbol = "R";
+    private decimal _taxRate = 15m;
+    private string _footprint = string.Empty;
+    private string _authBaseUrl = string.Empty;
+
+    // Search filters
+    private string _prodSearch = string.Empty;
+
+    // Dialog objects
+    private bool _receiptPreviewVisible;
+    private DialogOptions _receiptPreviewOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+    private Transaction? _viewingTransaction;
+    private List<TransactionItem> _viewingItems = new();
+
+    // Product Dialog Edit variables
+    private bool _productDialogVisible;
+    private DialogOptions _editDialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+    private DialogOptions _smallDialogOptions = new() { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+    private string _productDialogTitle = string.Empty;
+    private Product _editingProduct = new();
+    private bool _isCreatingProduct = false;
+
+    // Category Dialog variables
+    private bool _categoryDialogVisible;
+    private string _categoryDialogTitle = string.Empty;
+    private Category _editingCategory = new();
+    private bool _isCreatingCategory = false;
+
+    // Cashier Dialog Edit variables
+    private bool _cashierDialogVisible;
+    private string _cashierDialogTitle = string.Empty;
+    private Cashier _editingCashier = new();
+    private bool _isCreatingCashier = false;
+    private string _newCashierPin = string.Empty;
+
+    // Reset pin dialog
+    private bool _resetPinDialogVisible;
+
+    private bool _isCheckingLicense = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        var query = db.Transactions.Include(t => t.Cashier).AsQueryable();
+        if (_startDate.HasValue)
+            query = query.Where(t => t.Timestamp >= _startDate.Value.ToUniversalTime());
+        if (_endDate.HasValue)
+            query = query.Where(t => t.Timestamp <= _endDate.Value.AddDays(1).AddTicks(-1).ToUniversalTime());
+            
+        _transactions = await query.OrderByDescending(t => t.Timestamp).ToListAsync();
+        _products = await db.Products.Include(p => p.Category).ToListAsync();
+        _categories = await db.Categories.ToListAsync();
+        _cashiers = await db.Cashiers.ToListAsync();
+        _auditLogs = await db.AuditLogs.OrderByDescending(a => a.Timestamp).ToListAsync();
+
+        _storeName = await Settings.GetStoreNameAsync();
+        _currencySymbol = await Settings.GetCurrencySymbolAsync();
+        _taxRate = await Settings.GetTaxRateAsync();
+        _footprint = await LicenceService.GetFootprintAsync();
+        _authBaseUrl = await LicenceService.GetAuthBaseUrlAsync();
+
+        CalculateAnalytics();
+    }
+
+    private void CalculateAnalytics()
+    {
+        var completed = _transactions.Where(t => t.OrderStatus == "Completed").ToList();
+        
+        _totalRevenue = completed.Sum(t => t.TotalAmount);
+        _avgSale = completed.Any() ? completed.Average(t => t.TotalAmount) : 0m;
+        
+        _cashTotal = completed.Where(t => t.PaymentMethod == "Cash").Sum(t => t.TotalAmount);
+        _cardTotal = completed.Where(t => t.PaymentMethod == "Card").Sum(t => t.TotalAmount);
+    }
+
+    private bool FilterProductSearch(Product element) => 
+        string.IsNullOrWhiteSpace(_prodSearch) ||
+        element.Name.Contains(_prodSearch, StringComparison.OrdinalIgnoreCase) ||
+        element.Barcode.Contains(_prodSearch, StringComparison.OrdinalIgnoreCase);
+
+    private async Task OpenReceiptPreview(Transaction tr)
+    {
+        _viewingTransaction = tr;
+        using var db = await DbFactory.CreateDbContextAsync();
+        _viewingItems = await db.TransactionItems.Where(ti => ti.TransactionId == tr.Id).ToListAsync();
+        _receiptPreviewVisible = true;
+    }
+
+    private async Task VoidTransactionAsync(Transaction tr)
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var dbTr = await db.Transactions.FirstOrDefaultAsync(t => t.Id == tr.Id);
+            if (dbTr == null) return;
+
+            dbTr.OrderStatus = "Voided";
+            db.Transactions.Update(dbTr);
+
+            // Re-increment stock levels
+            var items = await db.TransactionItems.Where(ti => ti.TransactionId == tr.Id).ToListAsync();
+            foreach (var item in items)
+            {
+                if (item.ProductId.HasValue)
+                {
+                    var prod = await db.Products.FirstOrDefaultAsync(p => p.Id == item.ProductId.Value);
+                    if (prod != null)
+                    {
+                        prod.StockQuantity += item.Quantity;
+                        db.Products.Update(prod);
+                    }
+                }
+            }
+
+            await db.SaveChangesAsync();
+            Snackbar.Add($"Transaction #{tr.Id} has been voided. Stock returned.", Severity.Warning);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Void failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void PrintZReport()
+    {
+        var totalSales = _transactions.Where(t => t.OrderStatus == "Completed").Sum(t => t.TotalAmount);
+        var cashSales = _transactions.Where(t => t.OrderStatus == "Completed" && t.PaymentMethod == "Cash").Sum(t => t.TotalAmount);
+        var cardSales = _transactions.Where(t => t.OrderStatus == "Completed" && t.PaymentMethod == "Card").Sum(t => t.TotalAmount);
+        var count = _transactions.Where(t => t.OrderStatus == "Completed").Count();
+        var voided = _transactions.Where(t => t.OrderStatus == "Voided").Count();
+
+        Snackbar.Add($"Z-Report printed! Shift totals cleared.", Severity.Info);
+        // Print Z-Report log mockup, then optionally clear transactions
+    }
+
+    private void OpenCreateProductDialog()
+    {
+        if (!_categories.Any())
+        {
+            Snackbar.Add("Add a category first (Categories tab) before creating products.", Severity.Warning);
+            return;
+        }
+        _editingProduct = new Product { IsActive = true, StockQuantity = 0, Color = "#CD853F", CategoryId = _categories.First().Id };
+        _isCreatingProduct = true;
+        _productDialogTitle = "Add New Product";
+        _productDialogVisible = true;
+    }
+
+    private async Task UploadProductsCsvAsync(IBrowserFile file)
+    {
+        if (file == null) return;
+        
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 10485760); // 10MB max
+            using var reader = new System.IO.StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+            var lines = content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            
+            if (lines.Length <= 1)
+            {
+                Snackbar.Add("CSV file is empty or only contains a header.", Severity.Warning);
+                return;
+            }
+
+            var headers = lines[0].Split(',');
+            using var db = await DbFactory.CreateDbContextAsync();
+            int importedCount = 0;
+
+            for (int i = 1; i < lines.Length; i++)
+            {
+                var cols = lines[i].Split(',');
+                if (cols.Length < 3) continue;
+
+                var barcode = cols[0].Trim();
+                var name = cols[1].Trim();
+                var catIdStr = cols[2].Trim();
+                var priceStr = cols.Length > 3 ? cols[3].Trim() : "0";
+                var costStr = cols.Length > 4 ? cols[4].Trim() : "0";
+                var stockStr = cols.Length > 5 ? cols[5].Trim() : "0";
+
+                int.TryParse(catIdStr, out var catId);
+                decimal.TryParse(priceStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var price);
+                decimal.TryParse(costStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var cost);
+                int.TryParse(stockStr, out var stock);
+
+                // Skip if category doesn't exist
+                if (!await db.Categories.AnyAsync(c => c.Id == catId)) continue;
+
+                var existingProduct = await db.Products.FirstOrDefaultAsync(p => p.Barcode == barcode);
+                if (existingProduct != null)
+                {
+                    existingProduct.Name = name;
+                    existingProduct.CategoryId = catId;
+                    existingProduct.Price = price;
+                    existingProduct.Cost = cost;
+                    existingProduct.StockQuantity = stock;
+                    db.Products.Update(existingProduct);
+                }
+                else
+                {
+                    db.Products.Add(new Product
+                    {
+                        Barcode = barcode,
+                        Name = name,
+                        CategoryId = catId,
+                        Price = price,
+                        Cost = cost,
+                        StockQuantity = stock,
+                        IsActive = true,
+                        Color = "Default"
+                    });
+                }
+                importedCount++;
+            }
+            
+            db.AuditLogs.Add(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                CashierName = CashierSession.CurrentCashier?.Name ?? "System",
+                Action = "CSV Import",
+                Details = $"Imported/Updated {importedCount} products via CSV."
+            });
+
+            await db.SaveChangesAsync();
+            Snackbar.Add($"Successfully imported/updated {importedCount} products.", Severity.Success);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error importing CSV: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OpenEditProductDialog(Product prod)
+    {
+        _editingProduct = new Product
+        {
+            Id = prod.Id,
+            Name = prod.Name,
+            CategoryId = prod.CategoryId,
+            Price = prod.Price,
+            Cost = prod.Cost,
+            StockQuantity = prod.StockQuantity,
+            Barcode = prod.Barcode,
+            Color = prod.Color,
+            IsActive = prod.IsActive
+        };
+        _isCreatingProduct = false;
+        _productDialogTitle = $"Edit {prod.Name}";
+        _productDialogVisible = true;
+    }
+
+    private async Task SaveProductAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editingProduct.Name) || string.IsNullOrWhiteSpace(_editingProduct.Barcode))
+        {
+            Snackbar.Add("Name and Barcode are required.", Severity.Warning);
+            return;
+        }
+
+        if (_editingProduct.CategoryId <= 0 || !_categories.Any(c => c.Id == _editingProduct.CategoryId))
+        {
+            Snackbar.Add("Please select a valid category.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            if (_isCreatingProduct)
+            {
+                db.Products.Add(_editingProduct);
+            }
+            else
+            {
+                db.Products.Update(_editingProduct);
+            }
+
+            await db.SaveChangesAsync();
+            Snackbar.Add("Product saved successfully.", Severity.Success);
+            _productDialogVisible = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Save failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteProductAsync(Product prod)
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            db.Products.Remove(prod);
+            await db.SaveChangesAsync();
+            Snackbar.Add($"{prod.Name} deleted.", Severity.Warning);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Category actions
+    private void OpenCreateCategoryDialog()
+    {
+        _editingCategory = new Category { Color = "#2563EB", Icon = "Category" };
+        _isCreatingCategory = true;
+        _categoryDialogTitle = "Add New Category";
+        _categoryDialogVisible = true;
+    }
+
+    private void OpenEditCategoryDialog(Category cat)
+    {
+        _editingCategory = new Category { Id = cat.Id, Name = cat.Name, Color = cat.Color, Icon = cat.Icon };
+        _isCreatingCategory = false;
+        _categoryDialogTitle = $"Edit {cat.Name}";
+        _categoryDialogVisible = true;
+    }
+
+    private async Task SaveCategoryAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editingCategory.Name))
+        {
+            Snackbar.Add("Category name is required.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            if (_isCreatingCategory)
+            {
+                db.Categories.Add(_editingCategory);
+            }
+            else
+            {
+                db.Categories.Update(_editingCategory);
+            }
+
+            await db.SaveChangesAsync();
+            Snackbar.Add("Category saved successfully.", Severity.Success);
+            _categoryDialogVisible = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Save failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteCategoryAsync(Category cat)
+    {
+        if (_products.Any(p => p.CategoryId == cat.Id))
+        {
+            Snackbar.Add($"Cannot delete '{cat.Name}' — it still has products. Reassign or delete those products first.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var dbCat = await db.Categories.FirstOrDefaultAsync(c => c.Id == cat.Id);
+            if (dbCat != null)
+            {
+                db.Categories.Remove(dbCat);
+                await db.SaveChangesAsync();
+            }
+            Snackbar.Add($"Category '{cat.Name}' deleted.", Severity.Warning);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Cashier actions
+    private void OpenCreateCashierDialog()
+    {
+        _editingCashier = new Cashier { Role = "Cashier" };
+        _newCashierPin = string.Empty;
+        _isCreatingCashier = true;
+        _cashierDialogTitle = "Add New Cashier Profile";
+        _cashierDialogVisible = true;
+    }
+
+    private void OpenEditCashierDialog(Cashier cash)
+    {
+        _editingCashier = new Cashier
+        {
+            Id = cash.Id,
+            Name = cash.Name,
+            Role = cash.Role,
+            PinHash = cash.PinHash,
+            IsActive = cash.IsActive
+        };
+        _isCreatingCashier = false;
+        _cashierDialogTitle = $"Edit {cash.Name}";
+        _cashierDialogVisible = true;
+    }
+
+    private async Task SaveCashierAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editingCashier.Name))
+        {
+            Snackbar.Add("Cashier name is required.", Severity.Warning);
+            return;
+        }
+
+        if (_isCreatingCashier && (_newCashierPin.Length != 4 || !int.TryParse(_newCashierPin, out _)))
+        {
+            Snackbar.Add("PIN code must be exactly 4 numeric digits.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            
+            if (_isCreatingCashier)
+            {
+                var hashedPin = SecurityHelper.HashPin(_newCashierPin);
+                if (await db.Cashiers.AnyAsync(c => c.PinHash == hashedPin))
+                {
+                    Snackbar.Add("PIN is already in use by another cashier. Please choose a different PIN.", Severity.Error);
+                    return;
+                }
+                
+                _editingCashier.PinHash = hashedPin;
+                db.Cashiers.Add(_editingCashier);
+            }
+            else
+            {
+                db.Cashiers.Update(_editingCashier);
+            }
+
+            await db.SaveChangesAsync();
+            Snackbar.Add("Cashier saved successfully.", Severity.Success);
+            _cashierDialogVisible = false;
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Save failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void OpenResetPinDialog(Cashier cash)
+    {
+        _editingCashier = cash;
+        _newCashierPin = string.Empty;
+        _resetPinDialogVisible = true;
+    }
+
+    private async Task SaveResetPinAsync()
+    {
+        if (_editingCashier == null) return;
+        if (_newCashierPin.Length != 4 || !int.TryParse(_newCashierPin, out _))
+        {
+            Snackbar.Add("PIN code must be exactly 4 numeric digits.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            var hashedPin = SecurityHelper.HashPin(_newCashierPin);
+            
+            if (await db.Cashiers.AnyAsync(c => c.PinHash == hashedPin && c.Id != _editingCashier.Id))
+            {
+                Snackbar.Add("PIN is already in use by another cashier. Please choose a different PIN.", Severity.Error);
+                return;
+            }
+
+            var dbCash = await db.Cashiers.FirstOrDefaultAsync(c => c.Id == _editingCashier.Id);
+            if (dbCash != null)
+            {
+                dbCash.PinHash = hashedPin;
+                db.Cashiers.Update(dbCash);
+                await db.SaveChangesAsync();
+                Snackbar.Add($"PIN for {dbCash.Name} updated successfully.", Severity.Success);
+            }
+            _resetPinDialogVisible = false;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"PIN reset failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteCashierAsync(Cashier cash)
+    {
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            db.Cashiers.Remove(cash);
+            await db.SaveChangesAsync();
+            Snackbar.Add($"Cashier {cash.Name} removed.", Severity.Warning);
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Delete failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // Save configurations
+    private async Task SaveStoreSettingsAsync()
+    {
+        await Settings.SetSettingAsync("StoreName", _storeName);
+        await Settings.SetSettingAsync("CurrencySymbol", _currencySymbol);
+        await Settings.SetSettingAsync("TaxRate", _taxRate.ToString());
+        
+        Snackbar.Add("System settings updated.", Severity.Success);
+        await LoadDataAsync();
+    }
+
+    // Sync license
+    private async Task CheckLicenseStatusAsync()
+    {
+        _isCheckingLicense = true;
+        try
+        {
+            var success = await LicenceService.RefreshAsync();
+            if (success)
+            {
+                var status = await LicenceService.GetStatusAsync();
+                if (status.IsLicensed)
+                {
+                    Snackbar.Add("License synced. Active and valid.", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("License synced. Expired or disabled. Contact administrator.", Severity.Warning);
+                    Nav.NavigateTo("licence-check");
+                }
+            }
+            else
+            {
+                Snackbar.Add("Failed to reach PlatinumAuth licensing server.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Sync failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isCheckingLicense = false;
+            await LoadDataAsync();
+        }
+    }
+}

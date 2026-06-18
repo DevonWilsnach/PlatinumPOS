@@ -1,0 +1,168 @@
+@page "/licence-check"
+@inject LicenceClientService LicenceService
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
+
+<PageTitle>License Required — PlatinumPOS</PageTitle>
+
+<div class="d-flex align-center justify-center" style="min-height: 100vh; padding: 24px;">
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <MudPaper Class="pa-8 d-flex flex-column align-center w8-tile" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+            
+            <Logo Size="lg" Class="mb-6" IconOnly="true" />
+            
+            <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-2 font-weight-bold" Style="font-family: 'Outfit', sans-serif;">
+                License Activation Required
+            </MudText>
+            
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="mb-6">
+                To activate this point of sale terminal, register the device footprint in your <strong>PlatinumAuth</strong> licensing portal.
+            </MudText>
+
+            <!-- Status chip -->
+            <MudChip T="string" Color="@StatusColor" Size="Size.Medium" Variant="Variant.Text" 
+                     Icon="@StatusIcon" Class="mb-6 font-weight-bold">
+                Status: @_statusLabel
+            </MudChip>
+
+            @if (!string.IsNullOrEmpty(_statusMessage))
+            {
+                <MudAlert Severity="@AlertSeverity" Variant="Variant.Outlined" Class="mb-6 w-100" Style="border-radius:12px">
+                    @_statusMessage
+                </MudAlert>
+            }
+
+            <!-- Device footprint box -->
+            <div class="w-100 mb-6">
+                <MudText Typo="Typo.caption" Class="mb-1 d-block mud-text-secondary font-weight-bold">
+                    DEVICE FOOTPRINT
+                </MudText>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="w-100">
+                    <span class="pa-footprint flex-grow-1 text-center py-3">@_footprint</span>
+                    <MudTooltip Text="Copy Footprint">
+                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Primary" OnClick="CopyFootprint" 
+                                       Style="border: 1px solid var(--mud-palette-lines-default); border-radius: 8px; height: 50px; width: 50px;" />
+                    </MudTooltip>
+                </MudStack>
+            </div>
+
+            <MudDivider Class="w-100 mb-6" Style="border-color: var(--mud-palette-divider)" />
+
+            <!-- Configuration fields -->
+            <div class="w-100 mb-6">
+                <MudTextField @bind-Value="_authBaseUrl" Label="PlatinumAuth Server URL" 
+                              Placeholder="http://localhost:5225" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              HelperText="URL where the licensing server is running" Adornment="Adornment.Start" 
+                              AdornmentIcon="@Icons.Material.Filled.Link" />
+            </div>
+
+            <!-- Action buttons -->
+            <MudStack Row="true" Class="w-100" Spacing="3">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+                           DropShadow="false" Style="border-radius:100px; font-weight: 600; py-3"
+                           OnClick="CheckLicenseStatusAsync" Disabled="_isChecking">
+                    @if (_isChecking)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        <span>Verifying...</span>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="mr-2" />
+                        <span>Check License Status</span>
+                    }
+                </MudButton>
+            </MudStack>
+            
+        </MudPaper>
+    </MudContainer>
+</div>
+
+@code {
+    private string _footprint = "Loading...";
+    private string _authBaseUrl = "http://localhost:5225";
+    private string _statusLabel = "Unlicensed";
+    private string _statusMessage = string.Empty;
+    private bool _isChecking = false;
+
+    private Color StatusColor => _statusLabel switch
+    {
+        "Licensed" => Color.Success,
+        "Expired" => Color.Warning,
+        _ => Color.Error
+    };
+
+    private string StatusIcon => _statusLabel switch
+    {
+        "Licensed" => Icons.Material.Filled.CheckCircle,
+        "Expired" => Icons.Material.Filled.Warning,
+        _ => Icons.Material.Filled.Block
+    };
+
+    private Severity AlertSeverity => _statusLabel switch
+    {
+        "Licensed" => Severity.Success,
+        "Expired" => Severity.Warning,
+        _ => Severity.Error
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _footprint = await LicenceService.GetFootprintAsync();
+        _authBaseUrl = await LicenceService.GetAuthBaseUrlAsync();
+        await LoadLicenseStatusAsync();
+    }
+
+    private async Task LoadLicenseStatusAsync()
+    {
+        var status = await LicenceService.GetStatusAsync();
+        _statusLabel = status.StatusLabel;
+        _statusMessage = status.StatusMessage;
+    }
+
+    private async Task CheckLicenseStatusAsync()
+    {
+        _isChecking = true;
+        try
+        {
+            // Update auth base url
+            await LicenceService.SetAuthBaseUrlAsync(_authBaseUrl);
+
+            // Sync with auth server
+            var success = await LicenceService.RefreshAsync();
+            if (success)
+            {
+                await LoadLicenseStatusAsync();
+                var status = await LicenceService.GetStatusAsync();
+                if (status.IsLicensed)
+                {
+                    Snackbar.Add("License verified successfully! Unlocking system.", Severity.Success);
+                    Nav.NavigateTo("");
+                }
+                else
+                {
+                    Snackbar.Add("Sync completed, but license is still inactive. Make sure to activate it in PlatinumAuth.", Severity.Warning);
+                }
+            }
+            else
+            {
+                Snackbar.Add("Could not connect to PlatinumAuth server. Please check the URL and ensure the server is running.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Sync failed: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isChecking = false;
+        }
+    }
+
+    private async Task CopyFootprint()
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _footprint);
+        Snackbar.Add("Footprint copied to clipboard!", Severity.Info);
+    }
+}

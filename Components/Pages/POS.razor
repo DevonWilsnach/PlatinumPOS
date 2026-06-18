@@ -1,0 +1,838 @@
+@page "/"
+@inject IDbContextFactory<PosDbContext> DbFactory
+@inject CartService Cart
+@inject PosSettingsService Settings
+@inject CashierSession CashierSession
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<PageTitle>Sales Register — PlatinumPOS</PageTitle>
+
+<div class="pos-container">
+    
+    <!-- Left Cart Panel -->
+    <div class="pos-cart-panel">
+        <div class="pa-4 border-bottom d-flex align-center justify-between" style="border-bottom: 1px solid var(--mud-palette-divider)">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 700;">Current Ticket</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Cashier: @CashierSession.CurrentCashier?.Name</MudText>
+            </MudStack>
+            <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" Color="Color.Error" Size="Size.Small" OnClick="ClearCart" 
+                           Disabled="!Cart.Items.Any()" title="Clear Cart" />
+        </div>
+
+        <!-- Scrollable Cart Items -->
+        <div class="pos-cart-items">
+            @if (!Cart.Items.Any())
+            {
+                <div class="d-flex flex-column align-center justify-center h-100 py-12 text-center">
+                    <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Size="Size.Large" Color="Color.Default" Style="opacity: 0.25;" Class="mb-3" />
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Cart is empty</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-8 mt-1">Click products on the right to add them to the sale.</MudText>
+                </div>
+            }
+            else
+            {
+                @foreach (var item in Cart.Items)
+                {
+                    <div class="pos-cart-item-row">
+                        <MudStack Spacing="0" Style="flex: 1; min-width: 0;" Class="mr-2">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;" Class="text-truncate">
+                                @item.Product.Name
+                            </MudText>
+                            @if (!string.IsNullOrEmpty(item.Notes))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Warning" Class="text-truncate">
+                                    <MudIcon Icon="@Icons.Material.Filled.EditNote" Size="Size.Small" Class="mr-1" Style="vertical-align: middle;" />
+                                    @item.Notes
+                                </MudText>
+                            }
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @item.Quantity x @_currencySymbol@item.UnitPrice
+                                @if (item.DiscountAmount > 0)
+                                {
+                                    <span class="mud-text-error ml-1">(-@_currencySymbol@item.DiscountAmount)</span>
+                                }
+                            </MudText>
+                        </MudStack>
+
+                        <div class="d-flex align-center gap-1">
+                            <!-- Quantity adjustment popover -->
+                            <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline" Color="Color.Secondary" Size="Size.Small" 
+                                           OnClick="() => Cart.UpdateQuantity(item, item.Quantity - 1)" />
+                            
+                            <MudText Typo="Typo.body2" Style="font-weight:700; min-width:20px; text-align:center;">
+                                @item.Quantity
+                            </MudText>
+
+                            <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Color="Color.Secondary" Size="Size.Small" 
+                                           OnClick="() => AddProductToCartWithStockCheck(item.Product)" />
+
+                            <!-- Edit item options menu -->
+                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                                <MudMenuItem Icon="@Icons.Material.Filled.EditNote" OnClick="() => OpenItemNotesDialog(item)">Item Notes</MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.LocalOffer" OnClick="() => OpenItemDiscountDialog(item)">Apply Discount</MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.Delete" IconColor="Color.Error" OnClick="() => Cart.RemoveItem(item)">Remove Item</MudMenuItem>
+                            </MudMenu>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- Cart summary and Checkout action -->
+        <div class="pa-4 border-top" style="border-top: 1px solid var(--mud-palette-divider); background-color: var(--mud-palette-background-gray); border-radius: 0 0 16px 16px;">
+            <MudStack Spacing="1" Class="mb-3">
+                <div class="d-flex justify-between">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Subtotal</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@_currencySymbol@_subtotal.ToString("N2")</MudText>
+                </div>
+                
+                <div class="d-flex justify-between align-center">
+                    <MudLink Typo="Typo.body2" Color="Color.Primary" OnClick="OpenCartDiscountDialog">
+                        Discount @(_cartDiscountPercent > 0 ? $"({_cartDiscountPercent}%)" : "")
+                    </MudLink>
+                    <MudText Typo="Typo.body2" Color="@(_cartDiscountPercent > 0 ? Color.Error : Color.Default)" Style="font-weight: 500;">
+                        @(_cartDiscountPercent > 0 ? "-" : "")@_currencySymbol@_discountAmount.ToString("N2")
+                    </MudText>
+                </div>
+
+                <div class="d-flex justify-between">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">VAT (Included)</MudText>
+                    <MudText Typo="Typo.body2" Style="font-weight: 500;">@_currencySymbol@_taxAmount.ToString("N2")</MudText>
+                </div>
+
+                <MudDivider Class="my-2" Style="border-color: var(--mud-palette-divider)" />
+
+                <div class="d-flex justify-between align-center">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight: 700;">Grand Total</MudText>
+                    <MudText Typo="Typo.h5" Color="Color.Primary" Style="font-weight: 800; font-family: 'Outfit', sans-serif;">
+                        @_currencySymbol@_total.ToString("N2")
+                    </MudText>
+                </div>
+            </MudStack>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true" Size="Size.Large"
+                       DropShadow="false" Style="border-radius: 100px; font-weight: 700; py-3"
+                       Disabled="!Cart.Items.Any()" OnClick="OpenPaymentDialog">
+                <MudIcon Icon="@Icons.Material.Filled.Payment" Class="mr-2" />
+                <span>PAY & CHECKOUT</span>
+            </MudButton>
+        </div>
+    </div>
+
+    <!-- Right Product Catalog Panel -->
+    <div class="pos-catalog-panel">
+        
+        <!-- Category & Search Header -->
+        <MudPaper Class="pa-4 mb-4 w8-tile" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+            <MudGrid Spacing="2">
+                
+                <!-- Search input -->
+                <MudItem xs="12" sm="5">
+                    <MudTextField @bind-Value="_searchText" Placeholder="Search products or scan barcode..." Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Immediate="true" DebounceInterval="250"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-0" Clearable="true" />
+                </MudItem>
+
+                <!-- Horizontal categories -->
+                <MudItem xs="12" sm="7" Class="d-flex justify-sm-end align-center">
+                    <div style="overflow-x: auto; white-space: nowrap; width: 100%; display: flex; gap: 8px; padding-bottom: 2px;">
+                        <MudButton Variant="@(_selectedCategoryId == null ? Variant.Filled : Variant.Outlined)"
+                                   Color="@(_selectedCategoryId == null ? Color.Primary : Color.Default)"
+                                   Style="border-radius: 100px; font-weight: 600;" Size="Size.Small" DropShadow="false"
+                                   OnClick="() => SelectCategory(null)">
+                            All Items
+                        </MudButton>
+                        @foreach (var cat in _categories)
+                        {
+                            var categoryId = cat.Id;
+                            var isSelected = _selectedCategoryId == categoryId;
+                            <MudButton Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
+                                       Color="@(isSelected ? Color.Primary : Color.Default)"
+                                       Style="@($"border-radius: 100px; font-weight: 600; {(isSelected ? "" : $"border-color: {cat.Color} !important; color: {cat.Color} !important;")}")"
+                                       Size="Size.Small" DropShadow="false"
+                                       OnClick="() => SelectCategory(categoryId)"
+                                       StartIcon="@GetCategoryIcon(cat.Icon)">
+                                @cat.Name
+                            </MudButton>
+                        }
+                    </div>
+                </MudItem>
+
+            </MudGrid>
+        </MudPaper>
+
+        <!-- Product Grid -->
+        <div class="pos-product-grid">
+            @if (!_filteredProducts.Any())
+            {
+                <div class="d-flex flex-column align-center justify-center py-12">
+                    <MudIcon Icon="@Icons.Material.Filled.Inventory" Size="Size.Large" Color="Color.Default" Style="opacity: 0.2;" Class="mb-3" />
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">No products match your filters.</MudText>
+                </div>
+            }
+            else
+            {
+                <MudGrid Spacing="3">
+                    @foreach (var prod in _filteredProducts)
+                    {
+                        var isLowStock = prod.StockQuantity <= 5 && prod.StockQuantity > 0;
+                        var isOutOfStock = prod.StockQuantity <= 0;
+                        
+                        <MudItem xs="6" sm="4" md="3">
+                            <MudPaper Class="pos-product-card pa-4 d-flex flex-column justify-between"
+                                      Elevation="0"
+                                      Style="@($"background-color: var(--mud-palette-surface); border-top: 4px solid {prod.Color} !important;")"
+                                      @onclick="() => AddProductToCartWithStockCheck(prod)">
+                                <MudStack Spacing="0" Style="min-width: 0;">
+                                    <MudText Typo="Typo.body2" Style="font-weight: 700; line-height: 1.2;" Class="mb-1 pos-prod-name">
+                                        @prod.Name
+                                    </MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate">
+                                        Code: @prod.Barcode
+                                    </MudText>
+                                </MudStack>
+
+                                <div class="d-flex justify-between align-center mt-3" style="gap: 8px; min-width: 0;">
+                                    <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight: 700; white-space: nowrap;">
+                                        @_currencySymbol@prod.Price.ToString("N2")
+                                    </MudText>
+
+                                    <!-- Stock chip -->
+                                    @if (isOutOfStock)
+                                    {
+                                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text" Style="margin:0;">
+                                            Out of Stock
+                                        </MudChip>
+                                    }
+                                    else if (isLowStock)
+                                    {
+                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Text" Style="margin:0;">
+                                            @prod.StockQuantity Left
+                                        </MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            Stock: @prod.StockQuantity
+                                        </MudText>
+                                    }
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </div>
+    </div>
+
+</div>
+
+<!-- Checkout / Payment Dialog -->
+<MudDialog @bind-Visible="_paymentDialogVisible" Options="_paymentDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700; font-family:'Outfit',sans-serif;">
+            Payment & Checkout
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (!_checkoutComplete)
+        {
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6" Class="d-flex flex-column justify-between border-right" Style="border-right: 1px solid var(--mud-palette-divider)">
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">SALE SUMMARY</MudText>
+                        @foreach (var item in Cart.Items)
+                        {
+                            <div class="d-flex justify-between">
+                                <MudText Typo="Typo.body2">@item.Product.Name x @item.Quantity</MudText>
+                                <MudText Typo="Typo.body2">@_currencySymbol@item.LineTotal.ToString("N2")</MudText>
+                            </div>
+                        }
+                        <MudDivider Class="my-2" Style="border-color: var(--mud-palette-divider)" />
+                        <div class="d-flex justify-between align-center">
+                            <MudText Typo="Typo.subtitle1" Style="font-weight: 700;">Total Amount Due</MudText>
+                            <MudText Typo="Typo.h5" Color="Color.Primary" Style="font-weight: 800;">
+                                @_currencySymbol@_total.ToString("N2")
+                            </MudText>
+                        </div>
+                    </MudStack>
+
+                    <!-- Payment methods -->
+                    <div class="mt-6">
+                        <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mb-2">PAYMENT METHOD</MudText>
+                        <MudStack Row="true" Spacing="2">
+                            <MudButton Variant="@(_paymentMethod == "Cash" ? Variant.Filled : Variant.Outlined)"
+                                       Color="@(_paymentMethod == "Cash" ? Color.Primary : Color.Default)"
+                                       FullWidth="true" Style="border-radius:12px; font-weight:600; py-3"
+                                       OnClick='() => SelectPaymentMethod("Cash")'>
+                                <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Class="mr-1" /> Cash
+                            </MudButton>
+                            <MudButton Variant="@(_paymentMethod == "Card" ? Variant.Filled : Variant.Outlined)"
+                                       Color="@(_paymentMethod == "Card" ? Color.Primary : Color.Default)"
+                                       FullWidth="true" Style="border-radius:12px; font-weight:600; py-3"
+                                       OnClick='() => SelectPaymentMethod("Card")'>
+                                <MudIcon Icon="@Icons.Material.Filled.CreditCard" Class="mr-1" /> Card
+                            </MudButton>
+                            <MudButton Variant="@(_paymentMethod == "Split" ? Variant.Filled : Variant.Outlined)"
+                                       Color="@(_paymentMethod == "Split" ? Color.Primary : Color.Default)"
+                                       FullWidth="true" Style="border-radius:12px; font-weight:600; py-3"
+                                       OnClick='() => SelectPaymentMethod("Split")'>
+                                <MudIcon Icon="@Icons.Material.Filled.CallSplit" Class="mr-1" /> Split
+                            </MudButton>
+                        </MudStack>
+                    </div>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    @if (_paymentMethod == "Cash" || _paymentMethod == "Split")
+                    {
+                        <MudStack Spacing="3">
+                            <MudText Typo="Typo.subtitle2" Class="mud-text-secondary">CASH RECEIVED</MudText>
+                            <MudNumericField @bind-Value="_cashReceived" Label="Cash Received" 
+                                             Variant="Variant.Outlined" Format="N2" Culture="@(new System.Globalization.CultureInfo("en-ZA"))"
+                                             Immediate="true" HelperText="Enter exact cash amount given by customer" />
+
+                            @if (_paymentMethod == "Split")
+                            {
+                                <MudText Typo="Typo.subtitle2" Class="mud-text-secondary mt-2">CARD PORTION</MudText>
+                                <MudNumericField @bind-Value="_cardAmount" Label="Card Amount" 
+                                                 Variant="Variant.Outlined" Format="N2" Culture="@(new System.Globalization.CultureInfo("en-ZA"))"
+                                                 Immediate="true" HelperText="Enter amount to be processed on card" />
+                            }
+
+                            <!-- Quick ZAR note selectors -->
+                            @if (_paymentMethod == "Cash")
+                            {
+                                <div>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1 d-block">QUICK NOTES</MudText>
+                                    <MudGrid Spacing="1">
+                                        @foreach (var note in _zarNotes)
+                                        {
+                                            <MudItem xs="4">
+                                                <MudButton Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true" Size="Size.Small"
+                                                           Style="border-radius:8px; font-weight:600;" OnClick="() => QuickCash(note)">
+                                                    +@_currencySymbol@note
+                                                </MudButton>
+                                            </MudItem>
+                                        }
+                                        <MudItem xs="4">
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Error" FullWidth="true" Size="Size.Small"
+                                                       Style="border-radius:8px; font-weight:600;" OnClick="ClearCash">
+                                                Clear
+                                            </MudButton>
+                                        </MudItem>
+                                    </MudGrid>
+                                </div>
+                            }
+
+                            <!-- Change calculation -->
+                            <div class="pa-3 mt-4" style="background-color: var(--mud-palette-background-gray); border-radius:12px;">
+                                <div class="d-flex justify-between align-center">
+                                    <MudText Typo="Typo.subtitle1">Change Due</MudText>
+                                    <MudText Typo="Typo.h5" Color="@(ChangeAmount >= 0 ? Color.Success : Color.Error)" Style="font-weight:800;">
+                                        @_currencySymbol@Math.Max(0, ChangeAmount).ToString("N2")
+                                    </MudText>
+                                </div>
+                                @if (ChangeAmount < 0)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block mt-1 text-right">
+                                        Short by @_currencySymbol@Math.Abs(ChangeAmount).ToString("N2")
+                                    </MudText>
+                                }
+                            </div>
+                        </MudStack>
+                    }
+                    else if (_paymentMethod == "Card")
+                    {
+                        <div class="d-flex flex-column align-center justify-center py-12 text-center">
+                            <MudIcon Icon="@Icons.Material.Filled.CreditCard" Size="Size.Large" Color="Color.Primary" Class="mb-3" />
+                            <MudText Typo="Typo.subtitle1" Style="font-weight:700;">Swipe or Tap Card</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="px-6 mt-1">
+                                Please process the charge of <strong>@_currencySymbol@_total.ToString("N2")</strong> on the external card terminal.
+                            </MudText>
+                        </div>
+                    }
+                </MudItem>
+            </MudGrid>
+        }
+        else
+        {
+            <!-- Receipt & Sale success panel -->
+            <div class="d-flex flex-column align-center">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircleOutline" Color="Color.Success" Size="Size.Large" Class="mb-2" />
+                <MudText Typo="Typo.h6" Style="font-weight:700;">Checkout Complete!</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-4">Transaction ID: #@_completedTransactionId</MudText>
+
+                <!-- Receipt print visualization -->
+                <div style="background-color: #FFFFFF; color: #1F1F1F; font-family: 'JetBrains Mono', monospace; border: 1px dashed #747775; padding: 16px; border-radius: 8px; width: 100%; max-width: 320px; font-size: 0.8125rem;" class="mb-4">
+                    <div style="text-align: center; font-weight: bold; font-size: 0.9375rem; margin-bottom: 4px;">
+                        @_storeName
+                    </div>
+                    <div style="text-align: center; color:#444746; font-size:0.6875rem; margin-bottom: 8px;">
+                        Powered by Platinum Brink Technologies
+                    </div>
+                    <div style="border-bottom: 1px dashed #E3E3E3; padding-bottom: 4px; margin-bottom: 8px; font-size: 0.6875rem; color:#444746;">
+                        Date: @_completionTimestamp.ToLocalTime().ToString("g")<br />
+                        Cashier: @CashierSession.CurrentCashier?.Name<br />
+                        Sale ID: #@_completedTransactionId
+                    </div>
+                    
+                    @foreach (var item in Cart.Items)
+                    {
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span>@item.Product.Name x @item.Quantity</span>
+                            <span>@_currencySymbol@item.LineTotal.ToString("N2")</span>
+                        </div>
+                    }
+                    
+                    <div style="border-top: 1px dashed #E3E3E3; margin-top:8px; padding-top:8px;">
+                        <div style="display: flex; justify-content: space-between; font-weight: bold;">
+                            <span>TOTAL PAID</span>
+                            <span>@_currencySymbol@_total.ToString("N2")</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top:4px; color:#444746;">
+                            <span>Method</span>
+                            <span>@_paymentMethod</span>
+                        </div>
+                        @if (_paymentMethod == "Cash" || _paymentMethod == "Split")
+                        {
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color:#444746;">
+                                <span>Cash Tendered</span>
+                                <span>@_currencySymbol@_cashReceived.ToString("N2")</span>
+                            </div>
+                            @if (_paymentMethod == "Split")
+                            {
+                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color:#444746;">
+                                    <span>Card Processed</span>
+                                    <span>@_currencySymbol@_cardAmount.ToString("N2")</span>
+                                </div>
+                            }
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color:#444746;">
+                                <span>Change Given</span>
+                                <span>@_currencySymbol@Math.Max(0, ChangeAmount).ToString("N2")</span>
+                            </div>
+                        }
+                        else if (_paymentMethod == "Card")
+                        {
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color:#444746;">
+                                <span>Card Processed</span>
+                                <span>@_currencySymbol@_total.ToString("N2")</span>
+                            </div>
+                        }
+                    </div>
+                    <div style="text-align: center; margin-top: 16px; font-size:0.6875rem; color:#444746;">
+                        Thank you for your business!
+                    </div>
+                </div>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (!_checkoutComplete)
+        {
+            <MudButton OnClick="ClosePaymentDialog" Variant="Variant.Text" Style="border-radius:100px; font-weight:600;">Cancel</MudButton>
+            <MudButton Color="Color.Success" Variant="Variant.Filled" DropShadow="false" Style="border-radius:100px; font-weight:600;"
+                       OnClick="SubmitPaymentAsync" Disabled="@((_paymentMethod == "Cash" || _paymentMethod == "Split") && ChangeAmount < 0)">
+                Confirm & Print
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" FullWidth="true" DropShadow="false" Style="border-radius:100px; font-weight:600;"
+                       OnClick="StartNewSale">
+                Start New Sale
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+<!-- Item Notes Dialog -->
+<MudDialog @bind-Visible="_notesDialogVisible" Options="_smallDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700;">Item Notes</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_editingItem != null)
+        {
+            <MudTextField @bind-Value="_itemNotes" Label="Preparation instructions / Item Notes" 
+                          Variant="Variant.Outlined" Lines="3" Placeholder="e.g. Extra hot, Almond milk, No sugar..." />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _notesDialogVisible = false" Variant="Variant.Text" Style="border-radius:100px;">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" DropShadow="false" Style="border-radius:100px;" OnClick="SaveItemNotes">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Item Discount Dialog -->
+<MudDialog @bind-Visible="_itemDiscountDialogVisible" Options="_smallDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700;">Apply Item Discount</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_editingItem != null)
+        {
+            <MudNumericField @bind-Value="_itemDiscountAmount" Label="Discount Amount" 
+                             Variant="Variant.Outlined" Format="N2" Culture="@(new System.Globalization.CultureInfo("en-ZA"))"
+                             Min="0" Max="@(_editingItem.UnitPrice * _editingItem.Quantity)" 
+                             HelperText="@($"Max discount: {_currencySymbol}{_editingItem.UnitPrice * _editingItem.Quantity}")" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _itemDiscountDialogVisible = false" Variant="Variant.Text" Style="border-radius:100px;">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" DropShadow="false" Style="border-radius:100px;" OnClick="SaveItemDiscount">Apply</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Cart Discount Dialog -->
+<MudDialog @bind-Visible="_cartDiscountDialogVisible" Options="_smallDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight:700;">Apply Cart Discount</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudSelect @bind-Value="_cartDiscountPercent" Label="Select Discount Percentage" Variant="Variant.Outlined">
+            <MudSelectItem Value="0m">None (0%)</MudSelectItem>
+            <MudSelectItem Value="5m">5% Discount</MudSelectItem>
+            <MudSelectItem Value="10m">10% Discount</MudSelectItem>
+            <MudSelectItem Value="15m">15% Discount</MudSelectItem>
+            <MudSelectItem Value="20m">20% Discount</MudSelectItem>
+            <MudSelectItem Value="50m">50% Staff Discount</MudSelectItem>
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => _cartDiscountDialogVisible = false" Variant="Variant.Text" Style="border-radius:100px;">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" DropShadow="false" Style="border-radius:100px;" OnClick="SaveCartDiscount">Apply</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Category> _categories = new();
+    private List<Product> _products = new();
+    
+    private string _searchText = string.Empty;
+    private int? _selectedCategoryId;
+    
+    // Loaded system configurations
+    private string _storeName = "Platinum Brink Cafe & Deli";
+    private string _currencySymbol = "R";
+    private decimal _taxRate = 15m;
+
+    // Cart calculations (for layout display)
+    private decimal _subtotal;
+    private decimal _discountAmount;
+    private decimal _taxAmount;
+    private decimal _total;
+    private decimal _cartDiscountPercent = 0;
+
+    // Dialog flags and edit values
+    private bool _notesDialogVisible;
+    private bool _itemDiscountDialogVisible;
+    private bool _cartDiscountDialogVisible;
+    private bool _paymentDialogVisible;
+    
+    private CartItem? _editingItem;
+    private string _itemNotes = string.Empty;
+    private decimal _itemDiscountAmount;
+
+    private DialogOptions _smallDialogOptions = new() { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true };
+    private DialogOptions _paymentDialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+    // Payment dialog states
+    private string _paymentMethod = "Cash";
+    private decimal _cashReceived;
+    private decimal _cardAmount;
+    private decimal[] _zarNotes = new decimal[] { 10, 20, 50, 100, 200 };
+    private decimal ChangeAmount => (_paymentMethod == "Split" ? (_cashReceived + _cardAmount) : (_paymentMethod == "Card" ? _total : _cashReceived)) - _total;
+    private bool _checkoutComplete = false;
+    private int _completedTransactionId;
+    private DateTime _completionTimestamp;
+
+    private IEnumerable<Product> _filteredProducts =>
+        _products.Where(p => p.IsActive)
+                 .Where(p => _selectedCategoryId == null || p.CategoryId == _selectedCategoryId)
+                 .Where(p => string.IsNullOrWhiteSpace(_searchText) ||
+                             p.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                             p.Barcode.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        Cart.OnChange += OnCartChange;
+        
+        using var db = await DbFactory.CreateDbContextAsync();
+        _categories = await db.Categories.ToListAsync();
+        _products = await db.Products.ToListAsync();
+
+        _storeName = await Settings.GetStoreNameAsync();
+        _currencySymbol = await Settings.GetCurrencySymbolAsync();
+        _taxRate = await Settings.GetTaxRateAsync();
+
+        UpdateCartSummary();
+    }
+
+    private string GetCategoryIcon(string iconName) => iconName switch
+    {
+        "LocalCoffee" => Icons.Material.Filled.Coffee,
+        "LocalDrink" => Icons.Material.Filled.LocalDrink,
+        "Cake" => Icons.Material.Filled.Cake,
+        "Restaurant" => Icons.Material.Filled.Restaurant,
+        _ => Icons.Material.Filled.Category
+    };
+
+    private void SelectCategory(int? id)
+    {
+        _selectedCategoryId = id;
+    }
+
+    private void OnCartChange()
+    {
+        UpdateCartSummary();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateCartSummary()
+    {
+        _subtotal = Cart.GetRawSubtotal();
+        _discountAmount = Cart.GetTotalDiscount(_subtotal);
+        _total = Cart.GetFinalTotal();
+        _taxAmount = Cart.GetTaxAmount(_total, _taxRate);
+    }
+
+    private void AddProductToCartWithStockCheck(Product product)
+    {
+        // Find existing cart quantity if any
+        var cartQty = Cart.Items.Where(i => i.Product.Id == product.Id).Sum(i => i.Quantity);
+        
+        if (product.StockQuantity <= cartQty)
+        {
+            Snackbar.Add($"Cannot add {product.Name}. Insufficient stock (only {product.StockQuantity} available).", Severity.Warning);
+            return;
+        }
+
+        Cart.AddItem(product);
+        Snackbar.Add($"Added {product.Name} to ticket", Severity.Success, config => {
+            config.VisibleStateDuration = 1000;
+        });
+    }
+
+    private void ClearCart()
+    {
+        Cart.ClearCart();
+        _cartDiscountPercent = 0;
+        Snackbar.Add("Cart cleared", Severity.Info);
+    }
+
+    // Item notes dialog
+    private void OpenItemNotesDialog(CartItem item)
+    {
+        _editingItem = item;
+        _itemNotes = item.Notes;
+        _notesDialogVisible = true;
+    }
+
+    private void SaveItemNotes()
+    {
+        if (_editingItem != null)
+        {
+            Cart.SetItemNotes(_editingItem, _itemNotes);
+            Snackbar.Add("Notes updated", Severity.Success);
+        }
+        _notesDialogVisible = false;
+        _editingItem = null;
+    }
+
+    // Item discount dialog
+    private void OpenItemDiscountDialog(CartItem item)
+    {
+        _editingItem = item;
+        _itemDiscountAmount = item.DiscountAmount;
+        _itemDiscountDialogVisible = true;
+    }
+
+    private void SaveItemDiscount()
+    {
+        if (_editingItem != null)
+        {
+            var maxAllowed = _editingItem.UnitPrice * _editingItem.Quantity;
+            if (_itemDiscountAmount > maxAllowed)
+            {
+                Snackbar.Add($"Discount cannot exceed line subtotal of {_currencySymbol}{maxAllowed}", Severity.Error);
+                return;
+            }
+            Cart.ApplyItemDiscount(_editingItem, _itemDiscountAmount);
+            Snackbar.Add("Line discount applied", Severity.Success);
+        }
+        _itemDiscountDialogVisible = false;
+        _editingItem = null;
+    }
+
+    // Cart discount dialog
+    private void OpenCartDiscountDialog()
+    {
+        _cartDiscountPercent = Cart.CartDiscountPercent;
+        _cartDiscountDialogVisible = true;
+    }
+
+    private void SaveCartDiscount()
+    {
+        Cart.CartDiscountPercent = _cartDiscountPercent;
+        Cart.NotifyStateChanged();
+        Snackbar.Add($"Applied {_cartDiscountPercent}% cart discount", Severity.Success);
+        _cartDiscountDialogVisible = false;
+    }
+
+    // Payment flow
+    private void OpenPaymentDialog()
+    {
+        _paymentMethod = "Cash";
+        _cashReceived = _total; // Suggest exact cash by default
+        _checkoutComplete = false;
+        _paymentDialogVisible = true;
+    }
+
+    private void ClosePaymentDialog()
+    {
+        _paymentDialogVisible = false;
+    }
+
+    private void SelectPaymentMethod(string method)
+    {
+        _paymentMethod = method;
+        if (method == "Card")
+        {
+            _cashReceived = 0;
+            _cardAmount = _total;
+        }
+        else if (method == "Split")
+        {
+            _cashReceived = _total / 2;
+            _cardAmount = _total - _cashReceived;
+        }
+        else
+        {
+            _cashReceived = _total;
+            _cardAmount = 0;
+        }
+    }
+
+    private void QuickCash(decimal amt)
+    {
+        if (_cashReceived == _total && amt > 0)
+        {
+            _cashReceived = amt;
+        }
+        else
+        {
+            _cashReceived += amt;
+        }
+    }
+
+    private void ClearCash()
+    {
+        _cashReceived = 0;
+    }
+
+    private async Task SubmitPaymentAsync()
+    {
+        if (_paymentMethod == "Cash" && ChangeAmount < 0)
+        {
+            Snackbar.Add("Cash received is less than total amount due.", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            using var db = await DbFactory.CreateDbContextAsync();
+            
+            // Validate and deduct stocks for each item
+            foreach (var item in Cart.Items)
+            {
+                var dbProd = await db.Products.FirstOrDefaultAsync(p => p.Id == item.Product.Id);
+                if (dbProd == null)
+                {
+                    Snackbar.Add($"Product {item.Product.Name} no longer exists in database.", Severity.Error);
+                    return;
+                }
+                
+                if (dbProd.StockQuantity < item.Quantity)
+                {
+                    Snackbar.Add($"Insufficient stock for {dbProd.Name} (Only {dbProd.StockQuantity} left). Checkout aborted.", Severity.Error);
+                    return;
+                }
+                
+                dbProd.StockQuantity -= item.Quantity;
+                db.Products.Update(dbProd);
+            }
+
+            // Create Transaction record
+            var transaction = new Transaction
+            {
+                CashierId = CashierSession.CurrentCashier?.Id ?? 1,
+                Timestamp = DateTime.UtcNow,
+                Subtotal = _subtotal,
+                DiscountAmount = _discountAmount,
+                TotalAmount = _total,
+                TaxAmount = _taxAmount,
+                PaymentMethod = _paymentMethod,
+                CashReceived = _paymentMethod == "Cash" || _paymentMethod == "Split" ? _cashReceived : 0,
+                CardAmount = _paymentMethod == "Card" ? _total : (_paymentMethod == "Split" ? _cardAmount : 0),
+                ChangeGiven = _paymentMethod == "Cash" || _paymentMethod == "Split" ? Math.Max(0, ChangeAmount) : 0,
+                OrderStatus = "Completed"
+            };
+
+            db.Transactions.Add(transaction);
+            
+            db.AuditLogs.Add(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                CashierName = CashierSession.CurrentCashier?.Name ?? "System",
+                Action = "Sale Completed",
+                Details = $"Sale #{transaction.Id} for {_currencySymbol}{_total:N2} ({_paymentMethod})"
+            });
+            
+            await db.SaveChangesAsync(); // Generates ID
+
+            // Add Transaction Items
+            foreach (var item in Cart.Items)
+            {
+                var transItem = new TransactionItem
+                {
+                    TransactionId = transaction.Id,
+                    ProductId = item.Product.Id,
+                    ProductName = item.Product.Name + (!string.IsNullOrEmpty(item.Notes) ? $" ({item.Notes})" : ""),
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice,
+                    DiscountAmount = item.DiscountAmount
+                };
+                db.TransactionItems.Add(transItem);
+            }
+            await db.SaveChangesAsync();
+
+            // Refresh local product list stock counts
+            _products = await db.Products.ToListAsync();
+
+            _completedTransactionId = transaction.Id;
+            _completionTimestamp = transaction.Timestamp;
+            _checkoutComplete = true;
+            
+            Snackbar.Add("Sale finalized successfully", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Database error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void StartNewSale()
+    {
+        Cart.ClearCart();
+        _paymentDialogVisible = false;
+        _checkoutComplete = false;
+    }
+
+    public void Dispose()
+    {
+        Cart.OnChange -= OnCartChange;
+    }
+}

@@ -1,0 +1,141 @@
+@page "/lock"
+@inject IDbContextFactory<PosDbContext> DbFactory
+@inject CashierSession CashierSession
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Terminal Locked — PlatinumPOS</PageTitle>
+
+<div class="d-flex align-center justify-center" style="min-height: 100vh; padding: 24px; background-color: var(--mud-palette-background)">
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <MudGrid Spacing="4" Justify="Justify.Center">
+            
+            <!-- Keypad Entry panel -->
+            <MudItem xs="12" Class="d-flex flex-column align-center justify-center">
+                <MudPaper Class="pa-6 w8-tile d-flex flex-column align-center" Elevation="0" Style="background-color: var(--mud-palette-surface); min-width: 320px; max-width:360px;">
+                    
+                    <Logo Size="md" Class="mb-3 justify-center" IconOnly="true" />
+                    <MudText Typo="Typo.h5" Style="font-weight: 700; font-family: 'Outfit', sans-serif;" Class="mb-1">
+                        PlatinumPOS Terminal
+                    </MudText>
+                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600;" Class="mb-4">
+                        Enter your PIN
+                    </MudText>
+
+                    <!-- PIN display indicators (dots) -->
+                    <div class="d-flex justify-center gap-4 mb-6" style="height: 24px;">
+                        @for (int i = 0; i < 4; i++)
+                        {
+                            var dotActive = _pin.Length > i;
+                            <div style="@($"width: 16px; height: 16px; border-radius: 50%; border: 2px solid {(dotActive ? "var(--mud-palette-primary)" : "var(--mud-palette-divider)")}; background-color: {(dotActive ? "var(--mud-palette-primary)" : "transparent")}; transition: all 0.15s ease;")">
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Number pad grid -->
+                    <MudGrid Spacing="3" Justify="Justify.Center" Style="max-width: 280px;">
+                        @for (int n = 1; n <= 9; n++)
+                        {
+                            var digit = n;
+                            <MudItem xs="4" Class="d-flex justify-center">
+                                <MudButton Class="pos-keypad-btn" OnClick="() => AddDigit(digit.ToString())">
+                                    @digit
+                                </MudButton>
+                            </MudItem>
+                        }
+                        
+                        <!-- Backspace button -->
+                        <MudItem xs="4" Class="d-flex justify-center">
+                            <MudButton Class="pos-keypad-btn" Style="border-color:transparent !important;" OnClick="Backspace" Disabled="_pin.Length == 0">
+                                <MudIcon Icon="@Icons.Material.Filled.Backspace" Size="Size.Medium" Color="Color.Secondary" />
+                            </MudButton>
+                        </MudItem>
+
+                        <!-- Zero button -->
+                        <MudItem xs="4" Class="d-flex justify-center">
+                            <MudButton Class="pos-keypad-btn" OnClick="@(() => AddDigit("0"))">
+                                0
+                            </MudButton>
+                        </MudItem>
+
+                        <!-- Clear button -->
+                        <MudItem xs="4" Class="d-flex justify-center">
+                            <MudButton Class="pos-keypad-btn" Style="border-color:transparent !important;" OnClick="ClearPin" Disabled="_pin.Length == 0">
+                                <MudIcon Icon="@Icons.Material.Filled.Clear" Size="Size.Medium" Color="Color.Error" />
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-6 text-center">
+                        Default PINs: Admin=2510, Devon=1111, Stanton=2222, General=1234
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+        </MudGrid>
+    </MudContainer>
+</div>
+
+@code {
+    private string _pin = string.Empty;
+
+    private async Task AddDigit(string digit)
+    {
+        if (_pin.Length >= 4) return;
+        
+        _pin += digit;
+        
+        if (_pin.Length == 4)
+        {
+            // Give layout a brief moment to update dot visual before verifying
+            await Task.Delay(150);
+            await VerifyPinAsync();
+        }
+    }
+
+    private void Backspace()
+    {
+        if (_pin.Length > 0)
+        {
+            _pin = _pin.Substring(0, _pin.Length - 1);
+        }
+    }
+
+    private void ClearPin()
+    {
+        _pin = string.Empty;
+    }
+
+    private async Task VerifyPinAsync()
+    {
+        if (_pin.Length != 4) return;
+
+        var hashedPin = SecurityHelper.HashPin(_pin);
+        
+        using var db = await DbFactory.CreateDbContextAsync();
+        var cashier = await db.Cashiers.FirstOrDefaultAsync(c => c.IsActive && c.PinHash == hashedPin);
+        
+        if (cashier != null)
+        {
+            CashierSession.Login(cashier);
+            
+            // Log audit event
+            db.AuditLogs.Add(new AuditLog
+            {
+                Timestamp = DateTime.UtcNow,
+                CashierName = cashier.Name,
+                Action = "Login",
+                Details = "Cashier logged into terminal."
+            });
+            await db.SaveChangesAsync();
+
+            Snackbar.Add($"Signed in as {cashier.Name}", Severity.Success);
+            Nav.NavigateTo("");
+        }
+        else
+        {
+            Snackbar.Add("Incorrect PIN code. Please try again.", Severity.Error);
+            _pin = string.Empty;
+        }
+    }
+}

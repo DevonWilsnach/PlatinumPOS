@@ -1,0 +1,116 @@
+<div class="d-flex align-center gap-3 unselectable @Class">
+    <div class="position-relative @SvgClass flex-shrink-0 d-flex align-center justify-center">
+        <svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg"
+             class="w-100 h-100" style="filter: drop-shadow(0 4px 10px rgba(0,40,85,0.12));">
+            <defs>
+                <linearGradient id="silver_light" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#FFFFFF" />
+                    <stop offset="50%" stop-color="#E2E4E7" />
+                    <stop offset="100%" stop-color="#C5C8CC" />
+                </linearGradient>
+
+                <linearGradient id="silver_mid" x1="100%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#ECEFF1" />
+                    <stop offset="40%" stop-color="#CFD8DC" />
+                    <stop offset="100%" stop-color="#90A4AE" />
+                </linearGradient>
+
+                <linearGradient id="silver_dark" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#CFD8DC" />
+                    <stop offset="50%" stop-color="#90A4AE" />
+                    <stop offset="100%" stop-color="#546E7A" />
+                </linearGradient>
+
+                <linearGradient id="silver_shine" x1="100%" y1="100%" x2="0%" y2="0%">
+                    <stop offset="0%" stop-color="#FFFFFF" />
+                    <stop offset="30%" stop-color="#ECEFF1" />
+                    <stop offset="100%" stop-color="#78909C" />
+                </linearGradient>
+            </defs>
+
+            <path d="M100 20 L28 61.5 L28 138.5 L100 180 L172 138.5 L172 61.5 Z"
+                  fill="@(BorderColor == "navy" ? "#002855" : "#05070A")"
+                  stroke="@(BorderColor == "navy" ? "#002855" : "#05070A")"
+                  stroke-width="10" stroke-linejoin="round" />
+
+            <path d="M100 20 L28 61.5 L28 138.5 L100 180 L100 156 L48 126.5 L48 73.5 L100 44 Z"
+                  fill="url(#silver_light)" />
+
+            <path d="M100 20 L172 61.5 L172 138.5 L100 180 L100 156 L152 126.5 L152 73.5 L100 44 Z"
+                  fill="url(#silver_dark)" />
+
+            <path d="M100 20 L28 61.5 L48 73.5 L100 44 Z" fill="url(#silver_shine)" opacity="0.85" />
+            <path d="M172 61.5 L100 20 L100 44 L152 73.5 Z" fill="url(#silver_light)" opacity="0.9" />
+            <path d="M172 138.5 L100 180 L100 156 L152 126.5 Z" fill="url(#silver_mid)" />
+            <path d="M28 138.5 L100 180 L100 156 L48 126.5 Z" fill="url(#silver_mid)" />
+
+            <path d="M72 82 L72 172 L100 156 L100 98 Z" fill="url(#silver_dark)" />
+            <path d="M72 82 L100 98 L142 74 L114 58 Z" fill="url(#silver_shine)" />
+            <path d="M100 98 L142 74 L142 108 L100 132 Z" fill="url(#silver_light)" />
+            <path d="M72 82 L100 66 L114 58 L100 98 Z" fill="url(#silver_mid)" />
+
+            <line x1="100" y1="20" x2="100" y2="44" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity="0.9" />
+            <line x1="28" y1="61.5" x2="48" y2="73.5" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity="0.9" />
+            <line x1="172" y1="61.5" x2="152" y2="73.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.6" />
+            <line x1="100" y1="180" x2="100" y2="156" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.7" />
+            <line x1="72" y1="82" x2="100" y2="98" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity="0.9" />
+        </svg>
+    </div>
+
+    @if (!IconOnly)
+    {
+        <div class="d-flex flex-column text-left" style="line-height: 1.05;">
+            <span class="@TitleClass font-sans font-weight-bold text-uppercase" style="letter-spacing: 0.03em;">
+                PLATINUM BRINK
+            </span>
+            <span class="@SubtitleClass font-sans font-weight-bold text-uppercase" style="letter-spacing: 0.32em;">
+                TECHNOLOGIES
+            </span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Class { get; set; } = string.Empty;
+    [Parameter] public bool IconOnly { get; set; } = false;
+    [Parameter] public string Size { get; set; } = "md"; // "sm", "md", "lg"
+    [Parameter] public string BorderColor { get; set; } = "navy"; // "black" or "navy"
+
+    private string SvgClass => Size switch
+    {
+        "sm" => "logo-sm-svg",
+        "lg" => "logo-lg-svg",
+        _ => "logo-md-svg"
+    };
+
+    private string TitleClass => Size switch
+    {
+        "sm" => "logo-sm-title",
+        "lg" => "logo-lg-title",
+        _ => "logo-md-title"
+    };
+
+    private string SubtitleClass => Size switch
+    {
+        "sm" => "logo-sm-sub",
+        "lg" => "logo-lg-sub",
+        _ => "logo-md-sub"
+    };
+}
+
+<style>
+    .unselectable {
+        user-select: none;
+    }
+    .logo-sm-svg { width: 32px; height: 32px; }
+    .logo-sm-title { font-size: 1rem; color: var(--mud-palette-text-primary); font-weight: 800; }
+    .logo-sm-sub { font-size: 6px; color: var(--mud-palette-text-secondary); font-weight: 700; margin-top: -2px; }
+    
+    .logo-md-svg { width: 44px; height: 44px; }
+    .logo-md-title { font-size: 1.125rem; color: var(--mud-palette-text-primary); font-weight: 800; }
+    .logo-md-sub { font-size: 7.5px; color: var(--mud-palette-text-secondary); font-weight: 700; margin-top: -2px; }
+    
+    .logo-lg-svg { width: 96px; height: 96px; }
+    .logo-lg-title { font-size: 2.25rem; color: var(--mud-palette-text-primary); font-weight: 900; }
+    .logo-lg-sub { font-size: 11px; color: var(--mud-palette-text-secondary); font-weight: 800; margin-top: -4px; }
+</style>

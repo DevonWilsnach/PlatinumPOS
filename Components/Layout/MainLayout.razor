@@ -1,0 +1,192 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
+@inject LicenceClientService LicenceService
+@inject CashierSession CashierSession
+
+<MudThemeProvider @bind-IsDarkMode="_isDarkMode" Theme="PlatinumPOSTheme.Theme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout>
+    @if (_isLicensed && CashierSession.IsLoggedIn)
+    {
+        <MudAppBar Elevation="0" Color="Color.Surface" Dense="false"
+                   Style="border-bottom: 1px solid var(--mud-palette-divider)">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                           OnClick="@(() => _drawerOpen = !_drawerOpen)" />
+            
+            <div class="ml-2 cursor-pointer" @onclick='() => Nav.NavigateTo("")'>
+                <Logo Size="sm" BorderColor="@(_isDarkMode ? "navy" : "navy")" />
+            </div>
+
+            <MudSpacer />
+
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" Class="mr-2 d-none d-md-flex"
+                     Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle">
+                Licensed
+            </MudChip>
+
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="mr-2 d-none d-sm-flex"
+                     Color="Color.Primary" Icon="@(CashierSession.IsManager ? Icons.Material.Filled.SupervisorAccount : Icons.Material.Filled.Person)"
+                     Style="max-width: 220px;">
+                <span class="text-truncate">@CashierSession.CurrentCashier?.Name (@CashierSession.CurrentCashier?.Role)</span>
+            </MudChip>
+            
+            <MudTooltip Text="Lock Terminal">
+                <MudIconButton Icon="@Icons.Material.Filled.Lock" Color="Color.Warning" 
+                               OnClick="LockTerminal" Class="mr-2" />
+            </MudTooltip>
+
+            <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
+                <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                               Color="Color.Inherit" OnClick="ToggleDarkMode" />
+            </MudTooltip>
+        </MudAppBar>
+
+        <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Always"
+                   Variant="@DrawerVariant.Responsive" Style="border-right: 1px solid var(--mud-palette-divider) !important;">
+            <MudDrawerHeader Class="py-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <Logo Size="sm" IconOnly="true" />
+                    <MudText Typo="Typo.h6" Style="font-weight:800;letter-spacing:-0.3px;color:var(--mud-palette-text-primary)">PlatinumPOS</MudText>
+                </MudStack>
+            </MudDrawerHeader>
+
+            <MudNavMenu>
+                <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.LocalAtm">Sales Register</MudNavLink>
+                
+                @if (CashierSession.IsManager)
+                {
+                    <MudNavLink Href="back-office" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Analytics">Back Office</MudNavLink>
+                }
+                
+                <MudNavLink OnClick="LockTerminal" Icon="@Icons.Material.Filled.Lock">Lock Terminal</MudNavLink>
+            </MudNavMenu>
+
+            <MudSpacer />
+            <MudDivider Style="border-color:var(--mud-palette-divider)" />
+            <div class="pa-4 d-flex flex-column align-center">
+                <MudText Typo="Typo.caption" Align="Align.Center" Style="font-size:0.68rem;line-height:1.4;color:var(--mud-palette-text-secondary)">
+                    Powered by Platinum Brink Technologies<br />(PTY) LTD
+                </MudText>
+            </div>
+        </MudDrawer>
+
+        <MudMainContent>
+            <div class="w8-page-content">
+                @Body
+            </div>
+        </MudMainContent>
+    }
+    else
+    {
+        <MudMainContent Style="padding-left:0 !important; padding-top:0 !important;">
+            <div style="height:100vh; overflow-y:auto; background-color: var(--mud-palette-background)">
+                <div class="d-flex justify-end pa-4" style="position: absolute; right:0; top:0; z-index:100;">
+                    <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
+                        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                                       Color="Color.Default" OnClick="ToggleDarkMode" />
+                    </MudTooltip>
+                </div>
+                @Body
+            </div>
+        </MudMainContent>
+    }
+</MudLayout>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode = false;
+    private bool _isLicensed = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        CashierSession.OnChange += StateHasChanged;
+        
+        await CheckLicenseAndSessionAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var darkModeStr = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "darkMode");
+            if (!string.IsNullOrEmpty(darkModeStr) && bool.TryParse(darkModeStr, out bool isDark))
+            {
+                _isDarkMode = isDark;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        await InvokeAsync(async () =>
+        {
+            await CheckLicenseAndSessionAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task CheckLicenseAndSessionAsync()
+    {
+        _isLicensed = await LicenceService.IsLicensedAsync();
+        var path = Nav.ToBaseRelativePath(Nav.Uri);
+
+        if (!_isLicensed)
+        {
+            if (path != "licence-check")
+            {
+                Nav.NavigateTo("licence-check");
+            }
+        }
+        else
+        {
+            if (path == "licence-check")
+            {
+                Nav.NavigateTo("");
+            }
+            else if (!CashierSession.IsLoggedIn && path != "lock")
+            {
+                Nav.NavigateTo("lock");
+            }
+            else if (CashierSession.IsLoggedIn && path == "lock")
+            {
+                Nav.NavigateTo("");
+            }
+            else if (path == "back-office" && !CashierSession.IsManager)
+            {
+                // Restrict access to back-office for normal cashiers
+                Nav.NavigateTo("");
+            }
+        }
+    }
+
+    private void LockTerminal()
+    {
+        CashierSession.Logout();
+        Nav.NavigateTo("lock");
+    }
+
+    private async Task ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "darkMode", _isDarkMode.ToString());
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        CashierSession.OnChange -= StateHasChanged;
+    }
+}
