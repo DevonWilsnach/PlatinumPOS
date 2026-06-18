@@ -125,42 +125,38 @@
     <div class="pos-catalog-panel">
         
         <!-- Category & Search Header -->
-        <MudPaper Class="pa-4 mb-4 w8-tile" Elevation="0" Style="background-color: var(--mud-palette-surface);">
-            <MudGrid Spacing="2">
-                
-                <!-- Search input -->
-                <MudItem xs="12" sm="5">
-                    <MudTextField @bind-Value="_searchText" Placeholder="Search products or scan barcode..." Adornment="Adornment.Start"
-                                  AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Immediate="true" DebounceInterval="250"
-                                  Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-0" Clearable="true" />
-                </MudItem>
+        <MudPaper Class="pa-3 mb-3 w8-tile pos-catalog-header" Elevation="0" Style="background-color: var(--mud-palette-surface);">
 
-                <!-- Horizontal categories -->
-                <MudItem xs="12" sm="7" Class="d-flex justify-sm-end align-center">
-                    <div style="overflow-x: auto; white-space: nowrap; width: 100%; display: flex; gap: 8px; padding-bottom: 2px;">
-                        <MudButton Variant="@(_selectedCategoryId == null ? Variant.Filled : Variant.Outlined)"
-                                   Color="@(_selectedCategoryId == null ? Color.Primary : Color.Default)"
-                                   Style="border-radius: 100px; font-weight: 600;" Size="Size.Small" DropShadow="false"
-                                   OnClick="() => SelectCategory(null)">
-                            All Items
-                        </MudButton>
-                        @foreach (var cat in _categories)
-                        {
-                            var categoryId = cat.Id;
-                            var isSelected = _selectedCategoryId == categoryId;
-                            <MudButton Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
-                                       Color="@(isSelected ? Color.Primary : Color.Default)"
-                                       Style="@($"border-radius: 100px; font-weight: 600; {(isSelected ? "" : $"border-color: {cat.Color} !important; color: {cat.Color} !important;")}")"
-                                       Size="Size.Small" DropShadow="false"
-                                       OnClick="() => SelectCategory(categoryId)"
-                                       StartIcon="@GetCategoryIcon(cat.Icon)">
-                                @cat.Name
-                            </MudButton>
-                        }
-                    </div>
-                </MudItem>
+            <!-- Search input -->
+            <div class="pos-search-box">
+                <MudTextField @bind-Value="_searchText" Placeholder="Search products or scan barcode..." Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Immediate="true" DebounceInterval="250"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-0" Clearable="true" />
+            </div>
 
-            </MudGrid>
+            <!-- Horizontal categories -->
+            <div class="pos-cat-scroll">
+                <MudButton Variant="@(_selectedCategoryId == null ? Variant.Filled : Variant.Outlined)"
+                           Color="@(_selectedCategoryId == null ? Color.Primary : Color.Default)"
+                           Style="border-radius: 100px; font-weight: 600; flex: 0 0 auto;" Size="Size.Small" DropShadow="false"
+                           OnClick="() => SelectCategory(null)">
+                    All Items
+                </MudButton>
+                @foreach (var cat in _categories)
+                {
+                    var categoryId = cat.Id;
+                    var isSelected = _selectedCategoryId == categoryId;
+                    <MudButton Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
+                               Color="@(isSelected ? Color.Primary : Color.Default)"
+                               Style="@($"border-radius: 100px; font-weight: 600; flex: 0 0 auto; {(isSelected ? "" : $"border-color: {cat.Color} !important; color: {cat.Color} !important;")}")"
+                               Size="Size.Small" DropShadow="false"
+                               OnClick="() => SelectCategory(categoryId)"
+                               StartIcon="@GetCategoryIcon(cat.Icon)">
+                        @cat.Name
+                    </MudButton>
+                }
+            </div>
+
         </MudPaper>
 
         <!-- Product Grid -->
@@ -174,55 +170,53 @@
             }
             else
             {
-                <MudGrid Spacing="3">
+                <div class="pos-product-grid-inner">
                     @foreach (var prod in _filteredProducts)
                     {
                         var isLowStock = prod.StockQuantity <= 5 && prod.StockQuantity > 0;
                         var isOutOfStock = prod.StockQuantity <= 0;
-                        
-                        <MudItem xs="6" sm="4" md="3">
-                            <MudPaper Class="pos-product-card pa-4 d-flex flex-column justify-between"
-                                      Elevation="0"
-                                      Style="@($"background-color: var(--mud-palette-surface); border-top: 4px solid {prod.Color} !important;")"
-                                      @onclick="() => AddProductToCartWithStockCheck(prod)">
-                                <MudStack Spacing="0" Style="min-width: 0;">
-                                    <MudText Typo="Typo.body2" Style="font-weight: 700; line-height: 1.2;" Class="mb-1 pos-prod-name">
-                                        @prod.Name
-                                    </MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate">
-                                        Code: @prod.Barcode
-                                    </MudText>
-                                </MudStack>
 
-                                <div class="d-flex justify-between align-center mt-3" style="gap: 8px; min-width: 0;">
-                                    <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight: 700; white-space: nowrap;">
-                                        @_currencySymbol@prod.Price.ToString("N2")
-                                    </MudText>
+                        <MudPaper Class="pos-product-card pa-4 d-flex flex-column justify-between"
+                                  Elevation="0"
+                                  Style="@($"background-color: var(--mud-palette-surface); border-top: 4px solid {prod.Color} !important;")"
+                                  @onclick="() => AddProductToCartWithStockCheck(prod)">
+                            <MudStack Spacing="0" Style="min-width: 0;">
+                                <MudText Typo="Typo.body2" Style="font-weight: 700; line-height: 1.2;" Class="mb-1 pos-prod-name">
+                                    @prod.Name
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="text-truncate">
+                                    Code: @prod.Barcode
+                                </MudText>
+                            </MudStack>
 
-                                    <!-- Stock chip -->
-                                    @if (isOutOfStock)
-                                    {
-                                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text" Style="margin:0;">
-                                            Out of Stock
-                                        </MudChip>
-                                    }
-                                    else if (isLowStock)
-                                    {
-                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Text" Style="margin:0;">
-                                            @prod.StockQuantity Left
-                                        </MudChip>
-                                    }
-                                    else
-                                    {
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                            Stock: @prod.StockQuantity
-                                        </MudText>
-                                    }
-                                </div>
-                            </MudPaper>
-                        </MudItem>
+                            <div class="pos-card-foot mt-3">
+                                <MudText Typo="Typo.subtitle1" Color="Color.Primary" Style="font-weight: 700; white-space: nowrap;">
+                                    @_currencySymbol@prod.Price.ToString("N2")
+                                </MudText>
+
+                                <!-- Stock chip -->
+                                @if (isOutOfStock)
+                                {
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Text" Style="margin:0;">
+                                        Out of Stock
+                                    </MudChip>
+                                }
+                                else if (isLowStock)
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Text" Style="margin:0;">
+                                        @prod.StockQuantity Left
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Stock: @prod.StockQuantity
+                                    </MudText>
+                                }
+                            </div>
+                        </MudPaper>
                     }
-                </MudGrid>
+                </div>
             }
         </div>
     </div>

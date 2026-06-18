@@ -159,11 +159,11 @@
                     <MudText Typo="Typo.h6" Style="font-weight: 600;">Manage Products</MudText>
                     <MudStack Row="true" Spacing="2">
                         <MudFileUpload T="IBrowserFile" FilesChanged="UploadProductsCsvAsync" Accept=".csv">
-                            <ButtonTemplate>
-                                <MudButton HtmlTag="label" for="@context" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FileUpload" Style="border-radius:100px; font-weight:600;">
+                            <CustomContent>
+                                <MudButton OnClick="@context.OpenFilePickerAsync" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FileUpload" Style="border-radius:100px; font-weight:600;">
                                     Import CSV
                                 </MudButton>
-                            </ButtonTemplate>
+                            </CustomContent>
                         </MudFileUpload>
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" Style="border-radius:100px; font-weight:600;"
                                    OnClick="OpenCreateProductDialog" StartIcon="@Icons.Material.Filled.Add">

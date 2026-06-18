@@ -200,6 +200,55 @@ h1:focus { outline: none; }
     word-break: break-word;
 }
 
+/* ── Catalog header (search + category filters) ───────────────────────────
+   Flexbox that wraps, so it adapts to the *catalog panel's* width rather than
+   the viewport. In landscape the nav drawer + cart panel can squeeze the
+   catalog narrow; here the category strip drops below the search box instead
+   of the two colliding. */
+.pos-catalog-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+.pos-search-box {
+    flex: 1 1 230px;
+    min-width: 190px;
+}
+.pos-cat-scroll {
+    flex: 100 1 280px;
+    min-width: 0;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 2px;
+}
+
+/* ── Product grid: CONTAINER-responsive, not viewport-responsive ───────────
+   The number of columns follows the catalog panel's real width, so cards never
+   get crushed when the drawer/cart eat horizontal space (the old MudGrid
+   md="3" forced 4 columns off the *viewport* width, squashing prices into the
+   stock chips in tablet landscape). auto-fill + minmax keeps every card a
+   readable width and reflows the count automatically. */
+.pos-product-grid-inner {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 16px;
+    align-content: start;
+}
+
+/* Price + stock row inside each card. Wraps (chip drops below the price) when
+   the card is narrow, so the two never overlap or spill outside the tile. */
+.pos-card-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 8px;
+    min-width: 0;
+}
+
 /* ── Responsive: stack the register vertically on small tablets/portrait ── */
 @media (max-width: 860px) {
     .pos-container {
@@ -215,6 +264,18 @@ h1:focus { outline: none; }
     }
     .pos-catalog-panel {
         height: auto;
+    }
+}
+
+/* Landscape on small/medium tablets: the nav drawer is pinned open and eats
+   ~240px, so slim the cart panel and gaps to give the catalog more room. */
+@media (min-width: 861px) and (max-width: 1280px) {
+    .pos-cart-panel {
+        flex-basis: 320px;
+    }
+    .pos-container {
+        gap: 12px;
+        padding: 8px 6px;
     }
 }
 
