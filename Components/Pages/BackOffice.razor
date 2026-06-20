@@ -5,6 +5,7 @@
 @inject PosSettingsService Settings
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Back Office — PlatinumPOS</PageTitle>
 
@@ -72,7 +73,7 @@
 
                 <!-- Date Range Filter -->
                 <MudPaper Class="pa-4 mb-6 w8-tile" Elevation="0" Style="background-color: var(--mud-palette-surface);">
-                    <MudGrid Spacing="3" AlignItems="AlignItems.Center">
+                    <MudGrid Spacing="3" Class="align-center">
                         <MudItem xs="12" sm="4">
                             <MudDatePicker @bind-Date="_startDate" Label="Start Date" Variant="Variant.Outlined" Margin="Margin.Dense" />
                         </MudItem>
@@ -94,7 +95,7 @@
                         <MudText Typo="Typo.caption" Style="color: var(--mud-palette-primary-darken)">Generate a POS Z-Report to print and clear current session logs.</MudText>
                     </MudStack>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" DropShadow="false" Style="border-radius:100px; font-weight:600;" 
-                               OnClick="PrintZReport" StartIcon="@Icons.Material.Filled.Print">
+                               OnClick="PrintZReportAsync" StartIcon="@Icons.Material.Filled.Print">
                         Print Z-Report
                     </MudButton>
                 </div>
@@ -746,16 +747,78 @@
         }
     }
 
-    private void PrintZReport()
+    private async Task PrintZReportAsync()
     {
-        var totalSales = _transactions.Where(t => t.OrderStatus == "Completed").Sum(t => t.TotalAmount);
-        var cashSales = _transactions.Where(t => t.OrderStatus == "Completed" && t.PaymentMethod == "Cash").Sum(t => t.TotalAmount);
-        var cardSales = _transactions.Where(t => t.OrderStatus == "Completed" && t.PaymentMethod == "Card").Sum(t => t.TotalAmount);
-        var count = _transactions.Where(t => t.OrderStatus == "Completed").Count();
-        var voided = _transactions.Where(t => t.OrderStatus == "Voided").Count();
+        var completed = _transactions.Where(t => t.OrderStatus == "Completed").ToList();
+        var totalSales = completed.Sum(t => t.TotalAmount);
+        var totalDiscount = completed.Sum(t => t.DiscountAmount);
+        var cashSales = completed.Where(t => t.PaymentMethod == "Cash").Sum(t => t.TotalAmount);
+        var cardSales = completed.Where(t => t.PaymentMethod == "Card").Sum(t => t.TotalAmount);
+        var otherSales = totalSales - cashSales - cardSales; // Split / other tender
+        var count = completed.Count;
+        var voided = _transactions.Count(t => t.OrderStatus == "Voided");
 
-        Snackbar.Add($"Z-Report printed! Shift totals cleared.", Severity.Info);
-        // Print Z-Report log mockup, then optionally clear transactions
+        var html = BuildZReportHtml(totalSales, totalDiscount, cashSales, cardSales, otherSales, count, voided);
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("platinumPrint.printHtml", html);
+            Snackbar.Add("Z-Report sent to printer.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Print failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string BuildZReportHtml(decimal totalSales, decimal totalDiscount, decimal cashSales,
+        decimal cardSales, decimal otherSales, int count, int voided)
+    {
+        string Money(decimal v) => $"{_currencySymbol}{v.ToString("N2")}";
+        string Enc(string? s) => System.Net.WebUtility.HtmlEncode(s ?? string.Empty);
+
+        var rangeLabel = (_startDate.HasValue || _endDate.HasValue)
+            ? $"{(_startDate?.ToString("d") ?? "—")} to {(_endDate?.ToString("d") ?? "—")}"
+            : "All transactions";
+
+        var rows = new System.Text.StringBuilder();
+        void Row(string label, string value, bool bold = false)
+        {
+            var weight = bold ? "font-weight:bold;" : string.Empty;
+            rows.Append($"<div style=\"display:flex;justify-content:space-between;margin-bottom:4px;{weight}\"><span>{Enc(label)}</span><span>{Enc(value)}</span></div>");
+        }
+
+        Row("Completed Sales", count.ToString());
+        Row("Voided Sales", voided.ToString());
+        Row("Total Discounts", Money(totalDiscount));
+        rows.Append("<div style=\"border-top:1px dashed #999;margin:8px 0;padding-top:8px;\"></div>");
+        Row("Cash", Money(cashSales));
+        Row("Card", Money(cardSales));
+        Row("Other / Split", Money(otherSales));
+        rows.Append("<div style=\"border-top:1px dashed #999;margin:8px 0;padding-top:8px;\"></div>");
+        Row("GROSS TOTAL", Money(totalSales), bold: true);
+
+        var generated = Enc(DateTime.Now.ToString("g"));
+        var by = Enc(CashierSession.CurrentCashier?.Name ?? "—");
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<!DOCTYPE html><html><head><meta charset=\"utf-8\" /><title>Z-Report</title>");
+        sb.Append("<style>");
+        sb.Append("@media print { @page { margin: 8mm; } }");
+        sb.Append("body { font-family: 'Courier New', monospace; color:#1F1F1F; margin:0; padding:16px; }");
+        sb.Append(".receipt { max-width: 320px; margin: 0 auto; font-size: 13px; }");
+        sb.Append(".center { text-align:center; }");
+        sb.Append(".muted { color:#444; font-size:11px; }");
+        sb.Append("</style></head><body><div class=\"receipt\">");
+        sb.Append($"<div class=\"center\" style=\"font-weight:bold;font-size:15px;\">{Enc(_storeName)}</div>");
+        sb.Append("<div class=\"center muted\" style=\"margin-bottom:8px;\">Daily Z-Report (Shift Summary)</div>");
+        sb.Append("<div class=\"muted\" style=\"border-bottom:1px dashed #999;padding-bottom:6px;margin-bottom:8px;\">");
+        sb.Append($"Generated: {generated}<br />By: {by}<br />Period: {Enc(rangeLabel)}");
+        sb.Append("</div>");
+        sb.Append(rows);
+        sb.Append("<div class=\"center muted\" style=\"margin-top:16px;\">*** END OF REPORT ***</div>");
+        sb.Append("</div></body></html>");
+        return sb.ToString();
     }
 
     private void OpenCreateProductDialog()
