@@ -1,0 +1,39 @@
+@using MudBlazor
+
+<div style="width: 100%; max-width: 100%;">
+    <MudChart T="double" ChartType="ChartType.Donut"
+              ChartSeries="@Series"
+              Width="100%" Height="240px" ChartOptions="@_pieOptions" />
+
+    <MudDivider Class="my-2" />
+
+    @if (Series != null && Series.Any())
+    {
+        var values = ((IEnumerable<double>)Series[0].Data).ToArray();
+        @for (int i = 0; i < Labels.Length && i < values.Length; i++)
+        {
+            var idx = i;
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-1">
+                <div class="rw-legend-swatch" style="background:@(_pieOptions.ChartPalette![idx % _pieOptions.ChartPalette.Length])"></div>
+                <MudText Typo="Typo.body2" Style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@Labels[idx]</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@FormatPrefix@values[idx].ToString("N2")</MudText>
+            </MudStack>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public List<ChartSeries<double>> Series { get; set; } = new();
+    [Parameter] public string[] Labels { get; set; } = Array.Empty<string>();
+    [Parameter] public string FormatPrefix { get; set; } = "";
+
+    private readonly ChartOptions _pieOptions = new()
+    {
+        ChartPalette = new[]
+        {
+            "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6",
+            "#ec4899", "#f43f5e", "#fb923c", "#a3e635", "#34d399", "#22d3ee", "#60a5fa",
+            "#a78bfa", "#f472b6", "#fb7185", "#fbbf24", "#4ade80", "#2dd4bf"
+        }
+    };
+}

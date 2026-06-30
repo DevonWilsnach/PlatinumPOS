@@ -7,9 +7,7 @@
     <meta name="description" content="PlatinumPOS — Premium Point of Sale System by Platinum Brink Technologies" />
     <base href="/" />
     <meta name="app-version" content="@PlatinumPOS.Services.AppVersion.Current" data-app="PlatinumPOS" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["PlatinumPOS.styles.css"]" />
@@ -19,11 +17,36 @@
 </head>
 
 <body>
+    <div id="splash-screen" aria-hidden="true">
+        <canvas id="splashCanvas"></canvas>
+        <div class="splash-overlay">
+            <div class="splash-logo-wrap">
+                <div class="splash-glow"></div>
+                <img src="platinum-brink.svg" alt="Platinum Brink Technologies" class="splash-logo" />
+            </div>
+            <p class="splash-tagline">Powered by Platinum Brink Technologies (PTY) LTD</p>
+        </div>
+    </div>
+    <script src="js/splash.js"></script>
     <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="js/boot.js"></script>
     <script src="print.js"></script>
     <script src="version-check.js"></script>
+    <script>
+        window.downloadFileFromStream = async (fileName, contentStreamReference) => {
+            const arrayBuffer = await contentStreamReference.arrayBuffer();
+            const blob = new Blob([arrayBuffer]);
+            const url = URL.createObjectURL(blob);
+            const anchorElement = document.createElement('a');
+            anchorElement.href = url;
+            anchorElement.download = fileName ?? '';
+            anchorElement.click();
+            anchorElement.remove();
+            URL.revokeObjectURL(url);
+        }
+    </script>
 </body>
 
 </html>

@@ -1,0 +1,25 @@
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pb_light" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="50%" stop-color="#E2E4E7"/>
+      <stop offset="100%" stop-color="#C5C8CC"/>
+    </linearGradient>
+    <linearGradient id="pb_mid" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ECEFF1"/>
+      <stop offset="40%" stop-color="#CFD8DC"/>
+      <stop offset="100%" stop-color="#90A4AE"/>
+    </linearGradient>
+    <linearGradient id="pb_dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#CFD8DC"/>
+      <stop offset="50%" stop-color="#90A4AE"/>
+      <stop offset="100%" stop-color="#546E7A"/>
+    </linearGradient>
+  </defs>
+  <path d="M40 65 L55 50 L55 150 L40 135 Z" fill="url(#pb_mid)"/>
+  <path d="M55 50 L70 35 L70 165 L55 150 Z" fill="url(#pb_dark)"/>
+  <path d="M80 35 L120 35 A40 40 0 0 1 120 115 L80 115 L80 100 L120 100 A25 25 0 0 0 120 50 L80 50 Z" fill="url(#pb_light)"/>
+  <path d="M80 50 L120 50 A25 25 0 0 1 120 100 L80 100 L80 85 L120 85 A10 10 0 0 0 120 65 L80 65 Z" fill="url(#pb_dark)"/>
+  <path d="M55 50 L55 150" stroke="#003366" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M80 50 L120 50 A25 25 0 0 1 120 100 L80 100" fill="none" stroke="#003366" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

@@ -30,6 +30,8 @@ builder.Services.AddScoped<PosSettingsService>();
 builder.Services.AddScoped<CartService>();
 builder.Services.AddScoped<LicenceClientService>();
 builder.Services.AddScoped<CashierSession>();
+builder.Services.AddScoped<AnalyticsService>();
+builder.Services.AddScoped<ExcelIntegrationService>();
 
 // Running behind nginx (TLS terminated): honour X-Forwarded-* so the app sees real https.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -71,6 +73,9 @@ using (var scope = app.Services.CreateScope())
                 );");
         }
         catch { /* Table may already exist */ }
+
+        // Seed Gadget Shop demo data
+        GadgetShopSeeder.Seed(db);
     }
     catch (Exception ex)
     {

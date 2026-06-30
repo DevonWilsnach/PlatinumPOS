@@ -1,0 +1,151 @@
+@using System.Text
+@using System.Globalization
+@using MudBlazor
+
+<div class="rw-spark">
+    <svg class="rw-spark-svg" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="@_gradId1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="@ThemeColor" stop-opacity="0.28" />
+                <stop offset="100%" stop-color="@ThemeColor" stop-opacity="0" />
+            </linearGradient>
+            <linearGradient id="@_gradId2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="@ThemeColor2" stop-opacity="0.28" />
+                <stop offset="100%" stop-color="@ThemeColor2" stop-opacity="0" />
+            </linearGradient>
+        </defs>
+
+        @foreach (var gy in _gridYs)
+        {
+            <line x1="0" y1="@F(gy)" x2="100" y2="@F(gy)" class="rw-spark-grid" vector-effect="non-scaling-stroke" />
+        }
+
+        @if (_pts2.Any())
+        {
+            <path d="@_areaPath2" fill="url(#@_gradId2)" stroke="none" />
+            <path d="@_linePath2" fill="none" stroke="@ThemeColor2" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+        }
+        
+        @if (_pts1.Any())
+        {
+            <path d="@_areaPath1" fill="url(#@_gradId1)" stroke="none" />
+            <path d="@_linePath1" fill="none" stroke="@ThemeColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+        }
+    </svg>
+
+    @if (_pts2.Any())
+    {
+        @foreach (var p in _pts2)
+        {
+            <div class="rw-spark-dot"
+                 style="left:@(F(p.X))%;top:@(F(p.Y))%; border: 2.5px solid @ThemeColor2;"
+                 title="@p.Label · @FormatValue(p.Value)"></div>
+        }
+    }
+    
+    @if (_pts1.Any())
+    {
+        @foreach (var p in _pts1)
+        {
+            <div class="rw-spark-dot"
+                 style="left:@(F(p.X))%;top:@(F(p.Y))%; border: 2.5px solid @ThemeColor;"
+                 title="@p.Label · @FormatValue(p.Value)"></div>
+        }
+    }
+
+    <span class="rw-spark-ymax">@FormatValue(_scaleMax)</span>
+</div>
+<div class="rw-spark-axis">
+    @foreach (var p in (_pts1.Length > 0 ? _pts1 : _pts2))
+    {
+        <span style="left:@(F(p.X))%">@p.Label</span>
+    }
+</div>
+
+@code {
+    [Parameter] public List<ChartSeries<double>> Series { get; set; } = new();
+    [Parameter] public string[] Labels { get; set; } = Array.Empty<string>();
+    [Parameter] public string ThemeColor { get; set; } = "#1E88E5";
+    [Parameter] public string ThemeColor2 { get; set; } = "#ef4444";
+    [Parameter] public string FormatPrefix { get; set; } = "";
+    [Parameter] public string FormatSuffix { get; set; } = "";
+
+    private readonly record struct PlotPoint(double X, double Y, double Value, string Label);
+    private const double PadX  = 4;
+    private const double TopY  = 10;
+    private const double BaseY = 90;
+
+    private PlotPoint[] _pts1 = Array.Empty<PlotPoint>();
+    private PlotPoint[] _pts2 = Array.Empty<PlotPoint>();
+    private string _areaPath1 = string.Empty, _linePath1 = string.Empty;
+    private string _areaPath2 = string.Empty, _linePath2 = string.Empty;
+    private readonly double[] _gridYs = { 10, 30, 50, 70, 90 };
+    private double _scaleMax = 1;
+    private string _gradId1 = "grad-" + Guid.NewGuid().ToString("N");
+    private string _gradId2 = "grad-" + Guid.NewGuid().ToString("N");
+
+    protected override void OnParametersSet()
+    {
+        if (Series == null || !Series.Any()) return;
+
+        var vals1 = Series.Count > 0 ? ((IEnumerable<double>)Series[0].Data).ToArray() : Array.Empty<double>();
+        var vals2 = Series.Count > 1 ? ((IEnumerable<double>)Series[1].Data).ToArray() : Array.Empty<double>();
+
+        var maxVal = 0d;
+        foreach (var v in vals1) maxVal = Math.Max(maxVal, v);
+        foreach (var v in vals2) maxVal = Math.Max(maxVal, v);
+        _scaleMax = maxVal <= 0 ? 1 : maxVal * 1.15;
+
+        _pts1 = BuildPoints(vals1, Labels);
+        _linePath1 = LinePath(_pts1);
+        _areaPath1 = AreaPath(_pts1);
+
+        _pts2 = BuildPoints(vals2, Labels);
+        _linePath2 = LinePath(_pts2);
+        _areaPath2 = AreaPath(_pts2);
+    }
+
+    private PlotPoint[] BuildPoints(double[] vals, string[] labels)
+    {
+        if (vals == null) return Array.Empty<PlotPoint>();
+        var n = vals.Length;
+        var pts = new PlotPoint[n];
+        for (var i = 0; i < n; i++)
+        {
+            var x = n <= 1 ? 50 : PadX + (double)i / (n - 1) * (100 - 2 * PadX);
+            var y = BaseY - vals[i] / _scaleMax * (BaseY - TopY);
+            var lbl = i < labels.Length ? labels[i] : "";
+            pts[i] = new PlotPoint(x, y, vals[i], lbl);
+        }
+        return pts;
+    }
+
+    private static string LinePath(PlotPoint[] pts)
+    {
+        if (pts.Length == 0) return string.Empty;
+        var sb = new StringBuilder();
+        for (var i = 0; i < pts.Length; i++)
+            sb.Append(i == 0 ? 'M' : 'L').Append(F(pts[i].X)).Append(' ').Append(F(pts[i].Y)).Append(' ');
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string AreaPath(PlotPoint[] pts)
+    {
+        if (pts.Length == 0) return string.Empty;
+        var sb = new StringBuilder();
+        sb.Append('M').Append(F(pts[0].X)).Append(' ').Append(F(BaseY)).Append(' ');
+        foreach (var p in pts)
+            sb.Append('L').Append(F(p.X)).Append(' ').Append(F(p.Y)).Append(' ');
+        sb.Append('L').Append(F(pts[^1].X)).Append(' ').Append(F(BaseY)).Append(" Z");
+        return sb.ToString();
+    }
+
+    private static string F(double d) => d.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private string FormatValue(double val)
+    {
+        if (val >= 1000000) return $"{FormatPrefix}{(val / 1000000):F1}M{FormatSuffix}";
+        if (val >= 1000) return $"{FormatPrefix}{(val / 1000):F1}k{FormatSuffix}";
+        return $"{FormatPrefix}{val:F0}{FormatSuffix}";
+    }
+}

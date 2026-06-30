@@ -1,4 +1,4 @@
-/* PlatinumPOS — Google Material 3 / Cloud POS Dashboard Style */
+/* PlatinumPOS — Platinum Brink Technologies Design System */
 
 /* ── MudBlazor utility shims ──────────────────────────────────────────────
    The markup uses a few Tailwind/Bootstrap class names that MudBlazor 9.x does
@@ -15,7 +15,7 @@
 
 html, body {
     margin: 0;
-    font-family: 'Outfit', 'Inter', 'Roboto', Helvetica, Arial, sans-serif;
+    font-family: Inter, 'Segoe UI', system-ui, Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     overflow: hidden; /* POS usually locks viewport scroll */
     height: 100vh;
@@ -50,16 +50,14 @@ h1:focus { outline: none; }
 }
 .rw-brand-text { flex: 1 1 auto; min-width: 0; }
 
-/* ── Google Style Surface Cards ─────────────── */
+/* ── Dashboard action tiles ──────────────────────────────────────────── */
 .w8-tile {
-    border-radius: 16px !important;
-    border: 1px solid var(--mud-palette-lines-default, #E3E3E3);
-    box-shadow: none !important;
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+    transition: transform .2s, box-shadow .2s;
+    border-radius: 24px;
 }
-.w8-tile:hover {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24) !important;
-}
+.w8-tile:hover  { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,.08); }
+.w8-tile:active { transform: translateY(0);    box-shadow: 0 4px 12px rgba(0,0,0,.05); }
 
 /* ── Footprint code tag ──────────────────────────────────────────────── */
 .pa-footprint {
@@ -75,9 +73,9 @@ h1:focus { outline: none; }
     letter-spacing: 0.5px;
 }
 
-/* ── Activity card (Google style outlines) ───────────────────────────── */
+/* ── Activity card ───────────────────────────────────────────────────── */
 .rw-activity-card {
-    border-radius: 16px !important;
+    border-radius: 24px !important;
     border: 1px solid var(--mud-palette-lines-default, #E3E3E3);
     box-shadow: none !important;
     background-color: var(--mud-palette-surface);
@@ -108,10 +106,10 @@ h1:focus { outline: none; }
 }
 .mud-drawer .mud-nav-link.active {
     background-color: var(--mud-palette-primary-lighten) !important;
-    color: var(--mud-palette-primary-darken) !important;
+    color: var(--mud-palette-primary) !important;
 }
 .mud-drawer .mud-nav-link.active .mud-icon-root {
-    color: var(--mud-palette-primary-darken) !important;
+    color: var(--mud-palette-primary) !important;
 }
 
 /* ── Page footer ──────────────────────────────────────────────────────── */
@@ -135,7 +133,7 @@ h1:focus { outline: none; }
 
 /* ── Dialog polish ───────────────────────────────────────────────────── */
 .mud-dialog {
-    border-radius: 28px !important; /* MD3 Dialog radius */
+    border-radius: 28px !important;
     box-shadow: 0 24px 38px 3px rgba(0,0,0,0.14), 0 9px 46px 8px rgba(0,0,0,0.12), 0 11px 15px -7px rgba(0,0,0,0.2) !important;
 }
 
@@ -159,7 +157,7 @@ h1:focus { outline: none; }
 }
 .pos-keypad-btn:active {
     background-color: var(--mud-palette-primary-lighten) !important;
-    color: var(--mud-palette-primary-darken) !important;
+    color: var(--mud-palette-primary) !important;
 }
 
 /* ── POS Layout containers ────────────────────────────────────────────── */
@@ -178,7 +176,7 @@ h1:focus { outline: none; }
     display: flex;
     flex-direction: column;
     height: 100%;
-    border-radius: 16px;
+    border-radius: 24px;
     border: 1px solid var(--mud-palette-lines-default);
     background-color: var(--mud-palette-surface);
 }
@@ -294,7 +292,7 @@ h1:focus { outline: none; }
 }
 
 .pos-product-card {
-    border-radius: 12px !important;
+    border-radius: 16px !important;
     border: 1px solid var(--mud-palette-lines-default);
     transition: transform 0.1s ease, box-shadow 0.15s ease;
     cursor: pointer;
@@ -319,3 +317,159 @@ h1:focus { outline: none; }
 .pos-cart-item-row:last-child {
     border-bottom: none;
 }
+
+/* ── Animated splash screen (canvas particle effect, light + dark modes) ── */
+#splash-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    overflow: hidden;
+    transition: opacity 0.6s ease;
+}
+#splash-screen.splash-fade {
+    opacity: 0;
+    pointer-events: none;
+}
+#splashCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.splash-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 10;
+}
+.splash-logo-wrap {
+    position: relative;
+    margin-bottom: 2rem;
+}
+.splash-glow {
+    position: absolute;
+    top: -50%; left: -50%; right: -50%; bottom: -50%;
+    background: #003366;
+    filter: blur(60px);
+    opacity: 0.18;
+    border-radius: 50%;
+}
+.splash-logo {
+    position: relative;
+    z-index: 10;
+    width: min(18rem, 72vw);
+    height: auto;
+    filter: drop-shadow(0 0 24px rgba(0,51,102,0.55));
+}
+#splash-screen.splash-dark .splash-tagline {
+    color: rgba(255,255,255,0.70);
+    text-shadow: 0 0 10px rgba(0,51,102,0.5);
+}
+#splash-screen.splash-light .splash-tagline,
+#splash-screen:not(.splash-dark) .splash-tagline {
+    color: #444746;
+    text-shadow: none;
+}
+.splash-tagline {
+    font-family: Inter, 'Segoe UI', system-ui, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    margin: 0;
+}
+/* ── Activity chart sparkline (custom responsive SVG) ───────────────────
+   A fixed 0–100 viewBox stretched edge-to-edge (preserveAspectRatio="none").
+   Strokes use vector-effect:non-scaling-stroke so they stay crisp & uniform
+   regardless of the non-uniform stretch; data dots are HTML so they stay
+   perfectly round. This fills the full card width on every screen size. */
+.rw-spark {
+    position: relative;
+    width: 100%;
+    height: 250px;
+}
+.rw-spark--center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.rw-spark-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+}
+.rw-spark-grid {
+    stroke: var(--mud-palette-divider, #e2e8f0);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+    opacity: 0.5;
+}
+.rw-spark-dot {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--mud-palette-surface, #fff);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    transition: width .12s ease, height .12s ease;
+    cursor: default;
+    z-index: 2;
+}
+.rw-spark-dot--primary { border: 2.5px solid var(--mud-palette-primary, #ef4444); }
+.rw-spark-dot--secondary { border: 2.5px solid var(--mud-palette-secondary, #22c55e); }
+.rw-spark-dot:hover {
+    width: 14px;
+    height: 14px;
+    z-index: 3;
+}
+.rw-spark-ymax {
+    position: absolute;
+    top: 10%;
+    left: 0;
+    transform: translateY(-50%);
+    font-size: 0.68rem;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--mud-palette-text-secondary);
+    background: var(--mud-palette-surface, #fff);
+    padding: 1px 5px;
+    border-radius: 4px;
+    opacity: 0.9;
+    pointer-events: none;
+}
+.rw-spark-axis {
+    position: relative;
+    width: 100%;
+    height: 16px;
+    margin-top: 8px;
+}
+.rw-spark-axis span {
+    position: absolute;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-secondary);
+    white-space: nowrap;
+}
+@media (max-width: 480px) {
+    .rw-spark { height: 210px; }
+    .rw-spark-axis span { font-size: 0.62rem; }
+}
+
+
+/* Legend swatch (square colour indicator in the legend table) */
+.rw-legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+

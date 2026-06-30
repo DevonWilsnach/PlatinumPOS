@@ -61,6 +61,7 @@
                 @if (CashierSession.IsManager)
                 {
                     <MudNavLink Href="back-office" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Analytics">Back Office</MudNavLink>
+                    <MudNavLink Href="analytics" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Insights">Analytics</MudNavLink>
                 }
                 
                 <MudNavLink OnClick="LockTerminal" Icon="@Icons.Material.Filled.Lock">Lock Terminal</MudNavLink>
@@ -105,7 +106,7 @@
 
 @code {
     private bool _drawerOpen = true;
-    private bool _isDarkMode = false;
+    private bool _isDarkMode = true;
     private bool _isLicensed = false;
 
     protected override async Task OnInitializedAsync()
@@ -120,7 +121,7 @@
     {
         if (firstRender)
         {
-            var darkModeStr = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "darkMode");
+            var darkModeStr = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "rw-dark-mode");
             if (!string.IsNullOrEmpty(darkModeStr) && bool.TryParse(darkModeStr, out bool isDark))
             {
                 _isDarkMode = isDark;
@@ -169,6 +170,11 @@
                 // Restrict access to back-office for normal cashiers
                 Nav.NavigateTo("");
             }
+            else if (path == "analytics" && !CashierSession.IsManager)
+            {
+                // Restrict access to analytics for normal cashiers
+                Nav.NavigateTo("");
+            }
         }
     }
 
@@ -181,7 +187,7 @@
     private async Task ToggleDarkMode()
     {
         _isDarkMode = !_isDarkMode;
-        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "darkMode", _isDarkMode.ToString());
+        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "rw-dark-mode", _isDarkMode.ToString().ToLower());
     }
 
     public void Dispose()

@@ -1,0 +1,770 @@
+@page "/analytics"
+@inject IDbContextFactory<PosDbContext> DbFactory
+@inject CashierSession CashierSession
+@inject PosSettingsService Settings
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject AnalyticsService AnalyticsSvc
+
+<PageTitle>Analytics — PlatinumPOS</PageTitle>
+
+<div class="pa-6">
+    <div class="rw-brand-header mb-6">
+        <div class="rw-brand-text">
+            <MudText Typo="Typo.h4" Class="mb-1" Style="font-weight: 700; font-family: 'Outfit', sans-serif;">Analytics & Stock Intelligence</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">Sales forecasts, product performance, stock recommendations, and business rhythm analysis.</MudText>
+        </div>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-center align-center" style="min-height: 300px;">
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" Color="Color.Primary" />
+        </div>
+    }
+    else
+    {
+        <MudTabs Elevation="0" Outlined="true" Rounded="true" Color="Color.Primary" Class="rw-activity-card">
+
+            @* ──────────────── Tab 1: Sales Forecast ──────────────── *@
+            <MudTabPanel Text="Sales Forecast" Icon="@Icons.Material.Filled.TrendingUp">
+                <div class="pa-4">
+                    <MudGrid Spacing="3" Class="mb-6">
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Color="Color.Primary" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Next 7 Days</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">@_currencySymbol@_forecast.PredictedRevenue7.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.DateRange" Color="Color.Info" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Next 14 Days</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">@_currencySymbol@_forecast.PredictedRevenue14.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Tertiary" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Next 30 Days</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">@_currencySymbol@_forecast.PredictedRevenue30.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@(ForecastTrendIcon)" Color="@(ForecastTrendColor)" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Growth Trend</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">
+                                    @(_forecast.GrowthTrendPercent >= 0 ? "+" : "")@_forecast.GrowthTrendPercent.ToString("N1")%
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudText Typo="Typo.subtitle1" Class="mb-1" Style="font-weight: 700;">Daily Average Revenue</MudText>
+                    <MudText Typo="Typo.h5" Class="mb-4" Style="font-weight: 700; color: var(--mud-palette-primary);">@_currencySymbol@_forecast.DailyAverage.ToString("N2")</MudText>
+
+                    @if (_forecastBarLabels.Length > 0)
+                    {
+                        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">Historical vs Predicted Revenue</MudText>
+                        <MudPaper Class="pa-4 w8-tile" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <PlatinumLineGraph Series="@_forecastBarSeries" Labels="@_forecastBarLabels" ThemeColor="#1E88E5" ThemeColor2="#ef4444" FormatPrefix="@_currencySymbol" />
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4" Style="border-radius:12px">
+                            No transaction data available yet. Complete some sales to see forecast predictions.
+                        </MudAlert>
+                    }
+                </div>
+            </MudTabPanel>
+
+            @* ──────────────── Tab 2: Best & Worst Sellers ──────────────── *@
+            <MudTabPanel Text="Best & Worst Sellers" Icon="@Icons.Material.Filled.Leaderboard">
+                <div class="pa-4">
+                    @if (!_rankings.AllRankedByRevenue.Any())
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Style="border-radius:12px">
+                            No sales data available yet. Complete some transactions to see product rankings.
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600; color: var(--mud-palette-success);">
+                            <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small" Class="mr-1" /> Top 5 Best Sellers
+                        </MudText>
+                        <MudGrid Spacing="3" Class="mb-6">
+                            @foreach (var (item, index) in _rankings.TopSellers.Select((v, i) => (v, i)))
+                            {
+                                <MudItem xs="12" sm="6" md="@(index == 0 ? 4 : 2)">
+                                    <MudPaper Class="w8-tile pa-4 d-flex flex-column" Elevation="0"
+                                              Style="@($"background-color: var(--mud-palette-surface); {(index == 0 ? "border: 2px solid var(--mud-palette-success);" : "")}")">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                                                     Color="@(index == 0 ? Color.Success : Color.Default)">
+                                                #@(index + 1)
+                                            </MudChip>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@item.CategoryName</MudText>
+                                        </MudStack>
+                                        <MudText Typo="Typo.subtitle1" Style="font-weight: 700;">@item.ProductName</MudText>
+                                        <MudText Typo="Typo.body2" Style="font-weight: 600; color: var(--mud-palette-success);">
+                                            @_currencySymbol@item.TotalRevenue.ToString("N2")
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@item.TotalUnitsSold units sold</MudText>
+                                    </MudPaper>
+                                </MudItem>
+                            }
+                        </MudGrid>
+
+                        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600; color: var(--mud-palette-error);">
+                            <MudIcon Icon="@Icons.Material.Filled.TrendingDown" Size="Size.Small" Class="mr-1" /> Bottom 5 Worst Sellers
+                        </MudText>
+                        <MudGrid Spacing="3" Class="mb-6">
+                            @foreach (var (item, index) in _rankings.WorstSellers.Select((v, i) => (v, i)))
+                            {
+                                <MudItem xs="12" sm="6" md="@(index == 0 ? 4 : 2)">
+                                    <MudPaper Class="w8-tile pa-4 d-flex flex-column" Elevation="0"
+                                              Style="@($"background-color: var(--mud-palette-surface); {(index == 0 ? "border: 2px solid var(--mud-palette-error);" : "")}")">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                                                     Color="@(index == 0 ? Color.Error : Color.Default)">
+                                                #@(index + 1)
+                                            </MudChip>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@item.CategoryName</MudText>
+                                        </MudStack>
+                                        <MudText Typo="Typo.subtitle1" Style="font-weight: 700;">@item.ProductName</MudText>
+                                        <MudText Typo="Typo.body2" Style="font-weight: 600; color: var(--mud-palette-error);">
+                                            @_currencySymbol@item.TotalRevenue.ToString("N2")
+                                        </MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@item.TotalUnitsSold units sold</MudText>
+                                    </MudPaper>
+                                </MudItem>
+                            }
+                        </MudGrid>
+
+                        <MudGrid Spacing="4">
+                            <MudItem xs="12" md="6">
+                                <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">Revenue Share by Category</MudText>
+                                <MudPaper Class="pa-4 w8-tile d-flex justify-center" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                    @if (_revenueByCategorySeries.Any())
+                                    {
+                                    <PlatinumPieChart Series="@_revenueByCategorySeries" Labels="@_revenueByCategoryLabels" FormatPrefix="@_currencySymbol" />
+                                    }
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">Units Sold by Category</MudText>
+                                <MudPaper Class="pa-4 w8-tile d-flex justify-center" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                    @if (_unitsByCategorySeries.Any())
+                                    {
+                                        <PlatinumPieChart Series="@_unitsByCategorySeries" Labels="@_unitsByCategoryLabels" />
+                                    }
+                                </MudPaper>
+                            </MudItem>
+                        </MudGrid>
+                    }
+                </div>
+            </MudTabPanel>
+
+            @* ──────────────── Tab 3: Stock Recommendations ──────────────── *@
+            <MudTabPanel Text="Stock Recommendations" Icon="@Icons.Material.Filled.Inventory">
+                <div class="pa-4">
+                    <MudGrid Spacing="3" Class="mb-6">
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Critical (Out of Stock)</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700; color: var(--mud-palette-error);">@_stockRec.CriticalCount</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.TrendingDown" Color="Color.Warning" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Understocked</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700; color: var(--mud-palette-warning);">@_stockRec.UnderstockedCount</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Info" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Overstocked</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700; color: var(--mud-palette-info);">@_stockRec.OverstockedCount</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.MoneyOff" Color="Color.Error" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Excess Stock Value</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">@_currencySymbol@_stockRec.TotalExcessValue.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:12px">
+                        <strong>How it works:</strong> Stock limits are calculated using average daily sales velocity × 7-day lead time × 1.5 safety buffer. 
+                        Products selling more than 3× the recommendation are flagged as <strong>Overstocked</strong> — money sitting on shelves.
+                    </MudAlert>
+
+                    <MudTable Items="@_stockRec.Items" Hover="true" Breakpoint="Breakpoint.Md" Elevation="0" Dense="true" Filter="FilterStockSearch">
+                        <ToolBarContent>
+                            <MudTextField @bind-Value="_stockSearch" Placeholder="Search products..." Adornment="Adornment.Start"
+                                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Margin="Margin.Dense"
+                                          Variant="Variant.Outlined" Style="max-width:320px;" Immediate="true" />
+                        </ToolBarContent>
+                        <HeaderContent>
+                            <MudTh>Product</MudTh>
+                            <MudTh>Category</MudTh>
+                            <MudTh>Current Stock</MudTh>
+                            <MudTh>Avg Daily Sales</MudTh>
+                            <MudTh>Recommended Stock</MudTh>
+                            <MudTh>Stock Value</MudTh>
+                            <MudTh>Status</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Product" Style="font-weight:600">@context.ProductName</MudTd>
+                            <MudTd DataLabel="Category">@context.CategoryName</MudTd>
+                            <MudTd DataLabel="Current Stock">@context.CurrentStock</MudTd>
+                            <MudTd DataLabel="Avg Daily Sales">@context.AvgDailySales.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Recommended Stock">@context.RecommendedStock</MudTd>
+                            <MudTd DataLabel="Stock Value">@_currencySymbol@context.StockValue.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Status">
+                                @switch (context.Status)
+                                {
+                                    case "Critical":
+                                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">Critical</MudChip>
+                                        break;
+                                    case "Overstocked":
+                                        <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">Overstocked</MudChip>
+                                        break;
+                                    case "Understocked":
+                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">Understocked</MudChip>
+                                        break;
+                                    default:
+                                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text">OK</MudChip>
+                                        break;
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager />
+                        </PagerContent>
+                    </MudTable>
+
+                    @if (_stockValueByCategorySeries.Any())
+                    {
+                        <MudText Typo="Typo.h6" Class="mt-6 mb-3" Style="font-weight: 600;">Stock Value Distribution by Category</MudText>
+                        <MudPaper Class="pa-4 w8-tile d-flex justify-center" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <PlatinumPieChart Series="@_stockValueByCategorySeries" Labels="@_stockValueByCategoryLabels" FormatPrefix="@_currencySymbol" />
+                        </MudPaper>
+                    }
+                </div>
+            </MudTabPanel>
+
+            @* ──────────────── Tab 4: Business Day Analysis ──────────────── *@
+            <MudTabPanel Text="Business Day" Icon="@Icons.Material.Filled.Today">
+                <div class="pa-4">
+                    <MudGrid Spacing="3" Class="mb-6">
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface); border: 2px solid var(--mud-palette-success);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Success" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Best Day</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h5" Style="font-weight: 700;">@(_dayOfWeek.BestDay.Length > 0 ? _dayOfWeek.BestDay : "—")</MudText>
+                                <MudText Typo="Typo.body2" Style="font-weight: 600; color: var(--mud-palette-success);">@_currencySymbol@_dayOfWeek.BestDayRevenue.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface); border: 2px solid var(--mud-palette-error);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Worst Day</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h5" Style="font-weight: 700;">@(_dayOfWeek.WorstDay.Length > 0 ? _dayOfWeek.WorstDay : "—")</MudText>
+                                <MudText Typo="Typo.body2" Style="font-weight: 600; color: var(--mud-palette-error);">@_currencySymbol@_dayOfWeek.WorstDayRevenue.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Receipt" Color="Color.Primary" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Best Day Transactions</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">
+                                    @(_dayOfWeek.BestDay.Length > 0 && _dayOfWeek.TransactionsByDay.ContainsKey(_dayOfWeek.BestDay) ? _dayOfWeek.TransactionsByDay[_dayOfWeek.BestDay] : 0)
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Receipt" Color="Color.Secondary" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Worst Day Transactions</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">
+                                    @(_dayOfWeek.WorstDay.Length > 0 && _dayOfWeek.TransactionsByDay.ContainsKey(_dayOfWeek.WorstDay) ? _dayOfWeek.TransactionsByDay[_dayOfWeek.WorstDay] : 0)
+                                </MudText>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    @if (_dowBarLabels.Length > 0)
+                    {
+                        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">Revenue by Day of Week</MudText>
+                        <MudPaper Class="pa-4 w8-tile" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <PlatinumLineGraph Series="@_dowBarSeries" Labels="@_dowBarLabels" ThemeColor="#ef4444" FormatPrefix="@_currencySymbol" />
+                        </MudPaper>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Style="border-radius:12px">
+                            No transaction data available yet.
+                        </MudAlert>
+                    }
+                </div>
+            </MudTabPanel>
+
+            @* ──────────────── Tab 5: Week & Month Analysis ──────────────── *@
+            <MudTabPanel Text="Week & Month" Icon="@Icons.Material.Filled.CalendarMonth">
+                <div class="pa-4">
+                    @* Week of Month section *@
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                        <MudIcon Icon="@Icons.Material.Filled.ViewWeek" Size="Size.Small" Class="mr-1" /> Revenue by Week of Month
+                    </MudText>
+                    <MudGrid Spacing="3" Class="mb-4">
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface); border: 2px solid var(--mud-palette-success);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Success" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Best Week</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h5" Style="font-weight: 700;">@(_weekMonth.BestWeek.Length > 0 ? _weekMonth.BestWeek : "—")</MudText>
+                                <MudText Typo="Typo.body2" Style="font-weight: 600; color: var(--mud-palette-success);">@_currencySymbol@_weekMonth.BestWeekRevenue.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface); border: 2px solid var(--mud-palette-error);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Worst Week</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h5" Style="font-weight: 700;">@(_weekMonth.WorstWeek.Length > 0 ? _weekMonth.WorstWeek : "—")</MudText>
+                                <MudText Typo="Typo.body2" Style="font-weight: 600; color: var(--mud-palette-error);">@_currencySymbol@_weekMonth.WorstWeekRevenue.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    @if (_weekBarLabels.Length > 0)
+                    {
+                        <MudPaper Class="pa-4 w8-tile mb-6" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <PlatinumLineGraph Series="@_weekBarSeries" Labels="@_weekBarLabels" ThemeColor="#22c55e" FormatPrefix="@_currencySymbol" />
+                        </MudPaper>
+                    }
+
+                    @* Month of Year section *@
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">
+                        <MudIcon Icon="@Icons.Material.Filled.CalendarViewMonth" Size="Size.Small" Class="mr-1" /> Revenue by Month of Year
+                    </MudText>
+                    <MudGrid Spacing="3" Class="mb-4">
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface); border: 2px solid var(--mud-palette-success);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Success" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Best Month</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h5" Style="font-weight: 700;">@(_weekMonth.BestMonth.Length > 0 ? _weekMonth.BestMonth : "—")</MudText>
+                                <MudText Typo="Typo.body2" Style="font-weight: 600; color: var(--mud-palette-success);">@_currencySymbol@_weekMonth.BestMonthRevenue.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface); border: 2px solid var(--mud-palette-error);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Color="Color.Error" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Worst Month</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h5" Style="font-weight: 700;">@(_weekMonth.WorstMonth.Length > 0 ? _weekMonth.WorstMonth : "—")</MudText>
+                                <MudText Typo="Typo.body2" Style="font-weight: 600; color: var(--mud-palette-error);">@_currencySymbol@_weekMonth.WorstMonthRevenue.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    @if (_monthBarLabels.Length > 0)
+                    {
+                        <MudPaper Class="pa-4 w8-tile" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                            <PlatinumLineGraph Series="@_monthBarSeries" Labels="@_monthBarLabels" ThemeColor="#f97316" FormatPrefix="@_currencySymbol" />
+                        </MudPaper>
+                    }
+                </div>
+            </MudTabPanel>
+
+            @* ──────────────── Tab 6: Stockpile & Stocktake ──────────────── *@
+            <MudTabPanel Text="Stockpile & Stocktake" Icon="@Icons.Material.Filled.Warehouse">
+                <div class="pa-4">
+                    <MudGrid Spacing="3" Class="mb-6">
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Inventory2" Color="Color.Primary" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Total Stock Value</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">@_currencySymbol@_stockConsolidation.TotalCostValue.ToString("N2")</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@_stockConsolidation.TotalUnits units across @_stockConsolidation.TotalItemCount products</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Storefront" Color="Color.Tertiary" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Total Retail Value</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">@_currencySymbol@_stockConsolidation.TotalRetailValue.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Success" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Potential Profit</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700; color: var(--mud-palette-success);">@_currencySymbol@_stockConsolidation.TotalPotentialProfit.ToString("N2")</MudText>
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudPaper Class="w8-tile pa-5 d-flex flex-column" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Percent" Color="Color.Warning" Size="Size.Small" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Secondary">Gross Margin</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.h4" Style="font-weight: 700;">@_stockConsolidation.GrossMarginPercent.ToString("N1")%</MudText>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudGrid Spacing="4" Class="mb-6">
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">Stock Cost Value by Category</MudText>
+                            <MudPaper Class="pa-4 w8-tile d-flex justify-center" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                @if (_stockCostByCategorySeries.Any())
+                                {
+                                    <PlatinumPieChart Series="@_stockCostByCategorySeries" Labels="@_stockCostByCategoryLabels" FormatPrefix="@_currencySymbol" />
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-6">No stock data available.</MudText>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">Potential Margin by Category</MudText>
+                            <MudPaper Class="pa-4 w8-tile d-flex justify-center" Elevation="0" Style="background-color: var(--mud-palette-surface);">
+                                @if (_stockMarginByCategorySeries.Any())
+                                {
+                                    <PlatinumPieChart Series="@_stockMarginByCategorySeries" Labels="@_stockMarginByCategoryLabels" FormatPrefix="@_currencySymbol" />
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-6">No stock data available.</MudText>
+                                }
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight: 600;">Full Stock Consolidation</MudText>
+                    <MudTable Items="@_stockConsolidation.Items" Hover="true" Breakpoint="Breakpoint.Md" Elevation="0" Dense="true" Filter="FilterConsolidationSearch">
+                        <ToolBarContent>
+                            <MudTextField @bind-Value="_consolidationSearch" Placeholder="Search products..." Adornment="Adornment.Start"
+                                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Small" Margin="Margin.Dense"
+                                          Variant="Variant.Outlined" Style="max-width:320px;" Immediate="true" />
+                        </ToolBarContent>
+                        <HeaderContent>
+                            <MudTh>Product</MudTh>
+                            <MudTh>Category</MudTh>
+                            <MudTh>Qty on Hand</MudTh>
+                            <MudTh>Unit Cost</MudTh>
+                            <MudTh>Selling Price</MudTh>
+                            <MudTh>Stock Cost Value</MudTh>
+                            <MudTh>Stock Retail Value</MudTh>
+                            <MudTh>Potential Profit</MudTh>
+                            <MudTh>Status</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Product" Style="font-weight:600">@context.ProductName</MudTd>
+                            <MudTd DataLabel="Category">@context.CategoryName</MudTd>
+                            <MudTd DataLabel="Qty on Hand">
+                                <span class="@(context.StockQuantity <= 5 ? "mud-text-warning font-weight-bold" : "")">
+                                    @context.StockQuantity
+                                </span>
+                            </MudTd>
+                            <MudTd DataLabel="Unit Cost">@_currencySymbol@context.UnitCost.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Selling Price">@_currencySymbol@context.SellingPrice.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Stock Cost Value">@_currencySymbol@context.StockCostValue.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Stock Retail Value" Style="font-weight:700">@_currencySymbol@context.StockRetailValue.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Potential Profit" Style="font-weight:600; color: var(--mud-palette-success);">@_currencySymbol@context.PotentialProfit.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Status">
+                                @if (context.IsActive)
+                                {
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text">Active</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Text">Inactive</MudChip>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                        <PagerContent>
+                            <MudTablePager />
+                        </PagerContent>
+                    </MudTable>
+                </div>
+            </MudTabPanel>
+
+        </MudTabs>
+    }
+</div>
+
+@code {
+    private bool _isLoading = true;
+    private string _currencySymbol = "R";
+
+    // Tab 1: Sales Forecast
+    private SalesForecastResult _forecast = new();
+    private List<ChartSeries<double>> _forecastBarSeries = new();
+    private string[] _forecastBarLabels = Array.Empty<string>();
+
+    // Tab 2: Best & Worst Sellers
+    private ProductRankingsResult _rankings = new();
+    private List<ChartSeries<double>> _revenueByCategorySeries = new();
+    private string[] _revenueByCategoryLabels = Array.Empty<string>();
+    private List<ChartSeries<double>> _unitsByCategorySeries = new();
+    private string[] _unitsByCategoryLabels = Array.Empty<string>();
+
+    // Tab 3: Stock Recommendations
+    private StockRecommendationsResult _stockRec = new();
+    private string _stockSearch = string.Empty;
+    private List<ChartSeries<double>> _stockValueByCategorySeries = new();
+    private string[] _stockValueByCategoryLabels = Array.Empty<string>();
+
+    // Tab 4: Day of Week
+    private DayOfWeekResult _dayOfWeek = new();
+    private List<ChartSeries<double>> _dowBarSeries = new();
+    private string[] _dowBarLabels = Array.Empty<string>();
+
+    // Tab 5: Week & Month
+    private WeekMonthResult _weekMonth = new();
+    private List<ChartSeries<double>> _weekBarSeries = new();
+    private string[] _weekBarLabels = Array.Empty<string>();
+    private List<ChartSeries<double>> _monthBarSeries = new();
+    private string[] _monthBarLabels = Array.Empty<string>();
+
+    // Tab 6: Stockpile & Stocktake
+    private StockConsolidationResult _stockConsolidation = new();
+    private string _consolidationSearch = string.Empty;
+    private List<ChartSeries<double>> _stockCostByCategorySeries = new();
+    private string[] _stockCostByCategoryLabels = Array.Empty<string>();
+    private List<ChartSeries<double>> _stockMarginByCategorySeries = new();
+    private string[] _stockMarginByCategoryLabels = Array.Empty<string>();
+
+    // Chart options
+    private ChartOptions _barChartOptions = new()
+    {
+    };
+
+    // Computed helpers
+    private string ForecastTrendIcon => _forecast.GrowthTrendPercent >= 0
+        ? Icons.Material.Filled.TrendingUp
+        : Icons.Material.Filled.TrendingDown;
+    private Color ForecastTrendColor => _forecast.GrowthTrendPercent >= 0 ? Color.Success : Color.Error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currencySymbol = await Settings.GetCurrencySymbolAsync();
+        await LoadAllAnalyticsAsync();
+    }
+
+    private async Task LoadAllAnalyticsAsync()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Load all analytics data in parallel
+            var forecastTask = AnalyticsSvc.GetSalesForecastAsync();
+            var rankingsTask = AnalyticsSvc.GetProductRankingsAsync();
+            var stockRecTask = AnalyticsSvc.GetStockRecommendationsAsync();
+            var dowTask = AnalyticsSvc.GetDayOfWeekAnalysisAsync();
+            var weekMonthTask = AnalyticsSvc.GetWeekMonthAnalysisAsync();
+            var consolidationTask = AnalyticsSvc.GetStockConsolidationAsync();
+
+            await Task.WhenAll(forecastTask, rankingsTask, stockRecTask, dowTask, weekMonthTask, consolidationTask);
+
+            _forecast = forecastTask.Result;
+            _rankings = rankingsTask.Result;
+            _stockRec = stockRecTask.Result;
+            _dayOfWeek = dowTask.Result;
+            _weekMonth = weekMonthTask.Result;
+            _stockConsolidation = consolidationTask.Result;
+
+            BuildChartData();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading analytics: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void BuildChartData()
+    {
+        // ── Forecast bar chart ──
+        var historicalLast14 = _forecast.HistoricalDaily.TakeLast(14).ToList();
+        var predictedDays = _forecast.PredictedDaily.Take(14).ToList();
+
+        if (historicalLast14.Any() || predictedDays.Any())
+        {
+            var allDates = historicalLast14.Select(d => d.Date)
+                .Concat(predictedDays.Select(d => d.Date))
+                .Distinct()
+                .OrderBy(d => d)
+                .ToList();
+
+            _forecastBarLabels = allDates.Select(d => d.ToString("dd MMM")).ToArray();
+
+            var historicalValues = allDates.Select(d =>
+            {
+                var match = historicalLast14.FirstOrDefault(h => h.Date == d);
+                return match != null ? (double)match.Revenue : 0;
+            }).ToArray();
+
+            var predictedValues = allDates.Select(d =>
+            {
+                var match = predictedDays.FirstOrDefault(p => p.Date == d);
+                return match != null ? (double)match.Revenue : 0;
+            }).ToArray();
+
+            _forecastBarSeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Actual", Data = historicalValues },
+                new ChartSeries<double> { Name = "Predicted", Data = predictedValues }
+            };
+        }
+
+        // ── Revenue by category pie chart ──
+        if (_rankings.RevenueByCategory.Any(kv => kv.Value > 0))
+        {
+            var filtered = _rankings.RevenueByCategory.Where(kv => kv.Value > 0).ToList();
+            _revenueByCategoryLabels = filtered.Select(kv => kv.Key).ToArray();
+            _revenueByCategorySeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Revenue", Data = filtered.Select(kv => kv.Value).ToArray() }
+            };
+        }
+
+        // ── Units by category pie chart ──
+        if (_rankings.UnitsByCategory.Any(kv => kv.Value > 0))
+        {
+            var filtered = _rankings.UnitsByCategory.Where(kv => kv.Value > 0).ToList();
+            _unitsByCategoryLabels = filtered.Select(kv => kv.Key).ToArray();
+            _unitsByCategorySeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Units", Data = filtered.Select(kv => kv.Value).ToArray() }
+            };
+        }
+
+        // ── Stock value by category pie chart ──
+        if (_stockRec.StockValueByCategory.Any(kv => kv.Value > 0))
+        {
+            var filtered = _stockRec.StockValueByCategory.Where(kv => kv.Value > 0).ToList();
+            _stockValueByCategoryLabels = filtered.Select(kv => kv.Key).ToArray();
+            _stockValueByCategorySeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Stock Value", Data = filtered.Select(kv => kv.Value).ToArray() }
+            };
+        }
+
+        // ── Day of week bar chart ──
+        var dayOrder = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+        if (_dayOfWeek.RevenueByDay.Values.Any(v => v > 0))
+        {
+            _dowBarLabels = dayOrder.Select(d => d[..3]).ToArray(); // Mon, Tue, Wed...
+            _dowBarSeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Revenue", Data = dayOrder.Select(d => (double)_dayOfWeek.RevenueByDay.GetValueOrDefault(d, 0)).ToArray() }
+            };
+        }
+
+        // ── Week of month bar chart ──
+        if (_weekMonth.RevenueByWeek.Values.Any(v => v > 0))
+        {
+            _weekBarLabels = _weekMonth.RevenueByWeek.Keys.ToArray();
+            _weekBarSeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Revenue", Data = _weekMonth.RevenueByWeek.Values.Select(v => (double)v).ToArray() }
+            };
+        }
+
+        // ── Month of year bar chart ──
+        if (_weekMonth.RevenueByMonth.Values.Any(v => v > 0))
+        {
+            _monthBarLabels = _weekMonth.RevenueByMonth.Keys.ToArray();
+            _monthBarSeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Revenue", Data = _weekMonth.RevenueByMonth.Values.Select(v => (double)v).ToArray() }
+            };
+        }
+
+        // ── Stock consolidation pie charts ──
+        if (_stockConsolidation.CostValueByCategory.Any(kv => kv.Value > 0))
+        {
+            var filtered = _stockConsolidation.CostValueByCategory.Where(kv => kv.Value > 0).ToList();
+            _stockCostByCategoryLabels = filtered.Select(kv => kv.Key).ToArray();
+            _stockCostByCategorySeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Cost Value", Data = filtered.Select(kv => kv.Value).ToArray() }
+            };
+        }
+
+        if (_stockConsolidation.MarginByCategory.Any(kv => kv.Value > 0))
+        {
+            var filtered = _stockConsolidation.MarginByCategory.Where(kv => kv.Value > 0).ToList();
+            _stockMarginByCategoryLabels = filtered.Select(kv => kv.Key).ToArray();
+            _stockMarginByCategorySeries = new List<ChartSeries<double>>
+            {
+                new ChartSeries<double> { Name = "Margin", Data = filtered.Select(kv => kv.Value).ToArray() }
+            };
+        }
+    }
+
+    // ── Filter helpers ──
+    private bool FilterStockSearch(StockRecommendation item) =>
+        string.IsNullOrWhiteSpace(_stockSearch) ||
+        item.ProductName.Contains(_stockSearch, StringComparison.OrdinalIgnoreCase) ||
+        item.CategoryName.Contains(_stockSearch, StringComparison.OrdinalIgnoreCase);
+
+    private bool FilterConsolidationSearch(StockConsolidationItem item) =>
+        string.IsNullOrWhiteSpace(_consolidationSearch) ||
+        item.ProductName.Contains(_consolidationSearch, StringComparison.OrdinalIgnoreCase) ||
+        item.CategoryName.Contains(_consolidationSearch, StringComparison.OrdinalIgnoreCase);
+}

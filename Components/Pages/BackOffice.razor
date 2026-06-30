@@ -6,6 +6,7 @@
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 @inject IJSRuntime JSRuntime
+@inject ExcelIntegrationService ExcelService
 
 <PageTitle>Back Office — PlatinumPOS</PageTitle>
 
@@ -159,10 +160,14 @@
                 <div class="d-flex justify-between align-center mb-4">
                     <MudText Typo="Typo.h6" Style="font-weight: 600;">Manage Products</MudText>
                     <MudStack Row="true" Spacing="2">
-                        <MudFileUpload T="IBrowserFile" FilesChanged="UploadProductsCsvAsync" Accept=".csv">
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FileDownload" Style="border-radius:100px; font-weight:600;"
+                                   OnClick="ExportExcelAsync">
+                            Export Excel
+                        </MudButton>
+                        <MudFileUpload T="IBrowserFile" FilesChanged="ImportExcelAsync" Accept=".xlsx">
                             <CustomContent>
                                 <MudButton OnClick="@context.OpenFilePickerAsync" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FileUpload" Style="border-radius:100px; font-weight:600;">
-                                    Import CSV
+                                    Import Excel
                                 </MudButton>
                             </CustomContent>
                         </MudFileUpload>
@@ -834,89 +839,46 @@
         _productDialogVisible = true;
     }
 
-    private async Task UploadProductsCsvAsync(IBrowserFile file)
+    private async Task ExportExcelAsync()
+    {
+        try
+        {
+            var bytes = await ExcelService.ExportProductsAsync();
+            using var streamRef = new DotNetStreamReference(stream: new System.IO.MemoryStream(bytes));
+            await JSRuntime.InvokeVoidAsync("downloadFileFromStream", "PlatinumPOS_Export.xlsx", streamRef);
+            Snackbar.Add("Exported successfully.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error exporting: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ImportExcelAsync(IBrowserFile file)
     {
         if (file == null) return;
         
         try
         {
-            using var stream = file.OpenReadStream(maxAllowedSize: 10485760); // 10MB max
-            using var reader = new System.IO.StreamReader(stream);
-            var content = await reader.ReadToEndAsync();
-            var lines = content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            using var stream = file.OpenReadStream(maxAllowedSize: 20971520); // 20MB max
+            await ExcelService.ImportProductsAsync(stream);
             
-            if (lines.Length <= 1)
-            {
-                Snackbar.Add("CSV file is empty or only contains a header.", Severity.Warning);
-                return;
-            }
-
-            var headers = lines[0].Split(',');
             using var db = await DbFactory.CreateDbContextAsync();
-            int importedCount = 0;
-
-            for (int i = 1; i < lines.Length; i++)
-            {
-                var cols = lines[i].Split(',');
-                if (cols.Length < 3) continue;
-
-                var barcode = cols[0].Trim();
-                var name = cols[1].Trim();
-                var catIdStr = cols[2].Trim();
-                var priceStr = cols.Length > 3 ? cols[3].Trim() : "0";
-                var costStr = cols.Length > 4 ? cols[4].Trim() : "0";
-                var stockStr = cols.Length > 5 ? cols[5].Trim() : "0";
-
-                int.TryParse(catIdStr, out var catId);
-                decimal.TryParse(priceStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var price);
-                decimal.TryParse(costStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var cost);
-                int.TryParse(stockStr, out var stock);
-
-                // Skip if category doesn't exist
-                if (!await db.Categories.AnyAsync(c => c.Id == catId)) continue;
-
-                var existingProduct = await db.Products.FirstOrDefaultAsync(p => p.Barcode == barcode);
-                if (existingProduct != null)
-                {
-                    existingProduct.Name = name;
-                    existingProduct.CategoryId = catId;
-                    existingProduct.Price = price;
-                    existingProduct.Cost = cost;
-                    existingProduct.StockQuantity = stock;
-                    db.Products.Update(existingProduct);
-                }
-                else
-                {
-                    db.Products.Add(new Product
-                    {
-                        Barcode = barcode,
-                        Name = name,
-                        CategoryId = catId,
-                        Price = price,
-                        Cost = cost,
-                        StockQuantity = stock,
-                        IsActive = true,
-                        Color = "Default"
-                    });
-                }
-                importedCount++;
-            }
-            
             db.AuditLogs.Add(new AuditLog
             {
                 Timestamp = DateTime.UtcNow,
                 CashierName = CashierSession.CurrentCashier?.Name ?? "System",
-                Action = "CSV Import",
-                Details = $"Imported/Updated {importedCount} products via CSV."
+                Action = "Excel Import",
+                Details = $"Imported/Updated products via Excel."
             });
-
             await db.SaveChangesAsync();
-            Snackbar.Add($"Successfully imported/updated {importedCount} products.", Severity.Success);
+
+            Snackbar.Add($"Successfully imported products.", Severity.Success);
             await LoadDataAsync();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Error importing CSV: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Error importing Excel: {ex.Message}", Severity.Error);
         }
     }
 
